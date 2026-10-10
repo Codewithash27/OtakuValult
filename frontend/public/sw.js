@@ -1,5 +1,5 @@
-const CACHE = 'otakuvault-v1'
-const SHELL = ['/', '/index.html', '/icon.svg', '/manifest.webmanifest']
+const CACHE = 'otakuvault-v2'
+const SHELL = ['/', '/index.html', '/icons/icon-192.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)))

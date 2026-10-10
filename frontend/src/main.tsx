@@ -1,12 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { AuthProvider } from './hooks/useSession'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AppShell } from './components/AppShell'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import Dashboard from './pages/Dashboard'
+import Library from './pages/Library'
+import NotFound from './pages/NotFound'
 import './index.css'
 
 const queryClient = new QueryClient()
@@ -20,9 +22,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Dashboard />} />
+              <Route element={<AppShell />}>
+                <Route path="/" element={<Library />} />
+              </Route>
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

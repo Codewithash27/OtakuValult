@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MediaItem } from '../types/media'
+import { MODE_KEY, OVERRIDES_KEY, PREFS_CHANGED_EVENT as CHANGE_EVENT, schedulePrefsPush } from '../lib/prefsSync'
 
 export type ContentMode = 'creamy' | 'clean'
 
-const MODE_KEY = 'content-mode'
-const OVERRIDES_KEY = 'adult-overrides'
-const CHANGE_EVENT = 'adult-filter-changed'
 const ADULT_GENRES = ['Hentai', 'Ecchi']
 
 function readOverrides(): Record<string, boolean> {
@@ -31,7 +29,10 @@ function useStored<T>(read: () => T): T {
   return value
 }
 
-const notify = () => window.dispatchEvent(new Event(CHANGE_EVENT))
+const notify = () => {
+  window.dispatchEvent(new Event(CHANGE_EVENT))
+  schedulePrefsPush()
+}
 
 export function useContentMode() {
   const mode = useStored(readMode)

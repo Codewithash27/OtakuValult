@@ -10,9 +10,12 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Library from './pages/Library'
 import NotFound from './pages/NotFound'
+import { initPrefsSync } from './lib/prefsSync'
 import './index.css'
 
 const queryClient = new QueryClient()
+
+initPrefsSync()
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

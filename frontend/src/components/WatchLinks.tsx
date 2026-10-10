@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MediaItem } from '../types/media'
+import { WATCH_LINK_PREFIX, WATCH_LINKS_CHANGED_EVENT, schedulePrefsPush } from '../lib/prefsSync'
 
 interface Platform {
   name: string
@@ -41,15 +42,18 @@ const PLATFORMS: Record<MediaItem['media_type'], Platform[]> = {
   ],
 }
 
-const storageKey = (id: string) => `watch-link:${id}`
+const storageKey = (id: string) => `${WATCH_LINK_PREFIX}${id}`
 
 export function WatchLinks({ item }: { item: MediaItem }) {
   const [customLink, setCustomLink] = useState('')
   const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    setCustomLink(localStorage.getItem(storageKey(item.id)) || '')
+    const load = () => setCustomLink(localStorage.getItem(storageKey(item.id)) || '')
+    load()
     setEditing(false)
+    window.addEventListener(WATCH_LINKS_CHANGED_EVENT, load)
+    return () => window.removeEventListener(WATCH_LINKS_CHANGED_EVENT, load)
   }, [item.id])
 
   const saveLink = () => {
@@ -59,6 +63,7 @@ export function WatchLinks({ item }: { item: MediaItem }) {
     else localStorage.removeItem(storageKey(item.id))
     setCustomLink(url)
     setEditing(false)
+    schedulePrefsPush()
   }
 
   const isReadable = item.media_type === 'manga' || item.media_type === 'manhwa'

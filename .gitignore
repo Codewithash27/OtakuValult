@@ -3,6 +3,11 @@ node_modules/
 dist/
 .env.local
 .env.*.local
+*.js
+!*.config.js
+!postcss.config.js
+src/**/*.js
+!src/**/*.config.js
 
 # Python
 __pycache__/

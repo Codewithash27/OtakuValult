@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useDebounce } from '../hooks/useDebounce'
@@ -17,11 +18,11 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
   const [showFullModal, setShowFullModal] = useState(false)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
-  const [addingId, setAddingId] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<string>('all')
 
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [, setSearchParams] = useSearchParams()
 
   const debouncedQuery = useDebounce(query, 400)
   const { data: mediaItems = [] } = useMediaItems()
@@ -72,11 +73,9 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [])
 
-  const handleAddResult = async (result: SearchResult) => {
-    setAddingId(result.external_id)
+  const handleAddResult = (result: SearchResult) => {
     setSelectedResult(result)
     setShowAddDialog(true)
-    setAddingId(null)
   }
 
   const handleAddDialogClose = () => {
@@ -114,7 +113,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
                     key={item.id}
                     onClick={() => {
                       setShowDropdown(false)
-                      window.location.href = `/?item=${item.id}`
+                      setSearchParams({ item: item.id })
                     }}
                     className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
@@ -168,7 +167,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
                         result={result}
                         onAdd={handleAddResult}
                         isOnShelf={shelfItems.has(`${result.source}:${result.external_id}`)}
-                        isAdding={addingId === result.external_id}
+                        isAdding={false}
                       />
                     ))}
                     {searchData && searchData.results.length > 8 && (
@@ -224,7 +223,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
           onAdd={handleAddResult}
           onRetry={() => refetch()}
           existingItems={shelfItems}
-          addingId={addingId}
+          addingId={null}
         />
       )}
 

@@ -3,6 +3,7 @@ import { Outlet, useNavigate, Link } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { ThemeToggle } from './ThemeToggle'
+import { SearchBar } from './SearchBar'
 
 interface SidebarMenuProps {
   onNavigate?: () => void
@@ -44,7 +45,6 @@ function SidebarMenu({ onNavigate }: SidebarMenuProps) {
 
 export function AppShell() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [, setSearchParams] = useSearchParams()
   const { user, signOut } = useSession()
   const navigate = useNavigate()
@@ -60,7 +60,6 @@ export function AppShell() {
       next.delete('item')
       return next
     })
-    // This signal is used by Library to open the modal
     window.dispatchEvent(new CustomEvent('openAddModal'))
   }
 
@@ -133,16 +132,10 @@ export function AppShell() {
       <main className="flex-1 flex flex-col">
         {/* Top bar (search + add) */}
         <header className="hidden lg:flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 gap-4 items-center">
-          <input
-            type="text"
-            placeholder="Search your library..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-          />
+          <SearchBar onOpenManualAdd={handleAddItem} />
           <button
             onClick={handleAddItem}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg transition-colors"
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg transition-colors flex-shrink-0"
           >
             + Add item
           </button>
@@ -150,7 +143,7 @@ export function AppShell() {
 
         {/* Page content */}
         <div className="flex-1 overflow-auto p-4 lg:p-6">
-          <Outlet context={{ searchQuery, setSearchQuery }} />
+          <Outlet />
         </div>
       </main>
 

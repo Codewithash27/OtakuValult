@@ -1,8 +1,10 @@
 import { MediaType, Status } from '../types/media'
+import { ADULT_GENRES } from '../hooks/useAdultFilter'
 
 export interface ImportEntry {
-  source: 'anilist' | 'jikan'
-  external_id: string
+  key: string
+  source: 'anilist' | 'jikan' | 'manual'
+  external_id: string | null
   media_type: MediaType
   title: string
   poster_url: string | null
@@ -12,6 +14,12 @@ export interface ImportEntry {
   progress: number
   total: number | null
   notes: string | null
+  adult: boolean
+  /** Boys' love or yuri, from AniList tags. */
+  sameSex: boolean
+  /** Pasted line this entry was found from, with the other AniList matches to choose from. */
+  query?: string
+  alternatives?: ImportEntry[]
 }
 
 type ListKind = 'ANIME' | 'MANGA'
@@ -26,11 +34,16 @@ interface AniListMedia {
   episodes: number | null
   chapters: number | null
   countryOfOrigin: string | null
+  isAdult: boolean | null
+  genres: string[] | null
+  tags: { name: string }[] | null
 }
+
+const SAME_SEX_TAGS = ["Boys' Love", 'Shounen Ai', 'Yuri', 'Shoujo Ai', "Girls' Love"]
 
 const ANILIST_URL = 'https://graphql.anilist.co'
 
-const MEDIA_FIELDS = `id idMal type title { romaji english } coverImage { large } startDate { year } episodes chapters countryOfOrigin`
+const MEDIA_FIELDS = `id idMal type title { romaji english } coverImage { large } startDate { year } episodes chapters countryOfOrigin isAdult genres tags { name }`
 
 const LIST_QUERY = `
 query ($user: String, $type: MediaType, $chunk: Int) {
@@ -70,16 +83,25 @@ async function anilist<T>(query: string, variables: Record<string, unknown>, att
 const toRating = (score: number | null | undefined) =>
   score && score > 0 ? Math.min(10, Math.max(1, Math.round(score))) : null
 
-function fromMedia(media: AniListMedia): Pick<ImportEntry, 'source' | 'external_id' | 'media_type' | 'title' | 'poster_url' | 'year' | 'total'> {
+type MediaPart = Pick<
+  ImportEntry,
+  'key' | 'source' | 'external_id' | 'media_type' | 'title' | 'poster_url' | 'year' | 'total' | 'adult' | 'sameSex'
+>
+
+function fromMedia(media: AniListMedia): MediaPart {
   const isAnime = media.type === 'ANIME'
+  const external_id = `${isAnime ? 'anime' : 'manga'}:${media.id}`
   return {
+    key: `anilist:${external_id}`,
     source: 'anilist',
-    external_id: `${isAnime ? 'anime' : 'manga'}:${media.id}`,
+    external_id,
     media_type: isAnime ? 'anime' : media.countryOfOrigin === 'KR' ? 'manhwa' : 'manga',
     title: media.title.english || media.title.romaji || 'Untitled',
     poster_url: media.coverImage?.large || null,
     year: media.startDate?.year || null,
     total: (isAnime ? media.episodes : media.chapters) || null,
+    adult: !!media.isAdult || (media.genres ?? []).some((g) => ADULT_GENRES.includes(g)),
+    sameSex: (media.tags ?? []).some((t) => SAME_SEX_TAGS.includes(t.name)),
   }
 }
 
@@ -106,8 +128,8 @@ export async function fetchAniListUser(username: string, kinds: ListKind[]): Pro
       for (const list of collection?.lists ?? []) {
         for (const e of list.entries) {
           const base = fromMedia(e.media)
-          if (seen.has(base.external_id)) continue
-          seen.set(base.external_id, {
+          if (seen.has(base.key)) continue
+          seen.set(base.key, {
             ...base,
             status: ANILIST_STATUS[e.status] || 'plan_to_watch',
             rating: toRating(e.score),
@@ -219,20 +241,23 @@ export async function importMalFiles(files: File[], onProgress?: (done: number, 
   const seen = new Map<string, ImportEntry>()
   for (const r of rows) {
     const media = matched.get(`${r.kind}:${r.malId}`)
-    const base = media
+    const external_id = `${r.kind === 'ANIME' ? 'anime' : 'manga'}:${r.malId}`
+    const base: MediaPart = media
       ? fromMedia(media)
       : {
-          source: 'jikan' as const,
-          external_id: `${r.kind === 'ANIME' ? 'anime' : 'manga'}:${r.malId}`,
-          media_type: (r.kind === 'ANIME' ? 'anime' : 'manga') as MediaType,
+          key: `jikan:${external_id}`,
+          source: 'jikan',
+          external_id,
+          media_type: r.kind === 'ANIME' ? 'anime' : 'manga',
           title: r.title,
           poster_url: null,
           year: null,
           total: r.total,
+          adult: false,
+          sameSex: false,
         }
-    const key = `${base.source}:${base.external_id}`
-    if (seen.has(key)) continue
-    seen.set(key, {
+    if (seen.has(base.key)) continue
+    seen.set(base.key, {
       ...base,
       total: base.total ?? r.total,
       status: r.status,
@@ -242,4 +267,85 @@ export async function importMalFiles(files: File[], onProgress?: (done: number, 
     })
   }
   return [...seen.values()]
+}
+
+/** Splits pasted text into unique titles, dropping list bullets and numbering. */
+export function parsePastedTitles(text: string): string[] {
+  const seen = new Set<string>()
+  const titles: string[] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const title = raw.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()
+    if (title.length < 2 || seen.has(title.toLowerCase())) continue
+    seen.add(title.toLowerCase())
+    titles.push(title)
+  }
+  return titles
+}
+
+const SEARCH_BATCH = 10
+
+/** Looks up each pasted title on AniList. Titles with no match come back as manual entries. */
+export async function searchPastedTitles(
+  titles: string[],
+  opts: { type: ListKind | null; status: Status; markMissingAdult: boolean },
+  onProgress?: (done: number, total: number) => void
+): Promise<ImportEntry[]> {
+  const results: ImportEntry[] = []
+  const used = new Set<string>()
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+
+  for (let i = 0; i < titles.length; i += SEARCH_BATCH) {
+    onProgress?.(i, titles.length)
+    const batch = titles.slice(i, i + SEARCH_BATCH)
+    // AniList treats `type: null` as matching nothing, so the argument is left out entirely for "both".
+    const typeArg = opts.type ? ', type: $type' : ''
+    const vars = [...batch.map((_, j) => `$s${j}: String`), ...(opts.type ? ['$type: MediaType'] : [])].join(', ')
+    const pages = batch
+      .map((_, j) => `q${j}: Page(perPage: 5) { media(search: $s${j}${typeArg}, sort: SEARCH_MATCH) { ${MEDIA_FIELDS} } }`)
+      .join('\n')
+    const variables: Record<string, unknown> = opts.type ? { type: opts.type } : {}
+    batch.forEach((t, j) => (variables[`s${j}`] = t))
+    const data = await anilist<Record<string, { media: AniListMedia[] }>>(`query (${vars}) {\n${pages}\n}`, variables)
+
+    batch.forEach((query, j) => {
+      const media = data[`q${j}`]?.media ?? []
+      const options: ImportEntry[] = media.map((m) => ({
+        ...fromMedia(m),
+        status: opts.status,
+        rating: null,
+        progress: 0,
+        notes: null,
+        query,
+      }))
+      const q = norm(query)
+      const best =
+        options.find((o, k) => norm(o.title) === q || norm(media[k].title.romaji || '') === q) || options[0]
+
+      if (best && !used.has(best.key)) {
+        used.add(best.key)
+        results.push({ ...best, alternatives: options })
+      } else if (!best) {
+        results.push({
+          key: `manual:${query.toLowerCase()}`,
+          source: 'manual',
+          external_id: null,
+          media_type: opts.type === 'ANIME' ? 'anime' : 'manhwa',
+          title: query,
+          poster_url: null,
+          year: null,
+          status: opts.status,
+          rating: null,
+          progress: 0,
+          total: null,
+          notes: null,
+          adult: opts.markMissingAdult,
+          sameSex: false,
+          query,
+        })
+      }
+    })
+    if (i + SEARCH_BATCH < titles.length) await sleep(700)
+  }
+  onProgress?.(titles.length, titles.length)
+  return results
 }

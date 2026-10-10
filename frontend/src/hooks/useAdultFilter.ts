@@ -5,7 +5,7 @@ import { MODE_KEY, OVERRIDES_KEY, PREFS_CHANGED_EVENT as CHANGE_EVENT, scheduleP
 
 export type ContentMode = 'creamy' | 'clean'
 
-const ADULT_GENRES = ['Hentai', 'Ecchi']
+export const ADULT_GENRES = ['Hentai', 'Ecchi']
 
 function readOverrides(): Record<string, boolean> {
   try {
@@ -41,6 +41,14 @@ export function useContentMode() {
     notify()
   }, [])
   return [mode, setMode] as const
+}
+
+export function setAdultOverrides(itemIds: string[], value: boolean) {
+  if (!itemIds.length) return
+  const next = readOverrides()
+  itemIds.forEach((id) => (next[id] = value))
+  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next))
+  notify()
 }
 
 export function useAdultOverride(itemId: string) {

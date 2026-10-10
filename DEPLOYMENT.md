@@ -76,14 +76,13 @@ Skip if your tables already exist in the Supabase project.
 
 | Key | Value |
 |---|---|
-| `PYTHON_VERSION` | `3.12.4` |
-| `SUPABASE_URL` | your project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | service role key |
-| `SUPABASE_JWT_SECRET` | JWT secret |
-| `TMDB_API_KEY` | TMDB key |
-| `NVIDIA_API_KEY` | optional |
-| `FRONTEND_ORIGIN` | `http://localhost:5173` (update in step 4) |
+| `PYTHON_VERSION` | `3.12.4` **(required)** |
+| `FRONTEND_ORIGIN` | `http://localhost:5173` (update in step 4) **(required)** |
+| `TMDB_API_KEY` | optional — without it movie/TV search is skipped, anime/manga still work |
 | `FRONTEND_ORIGIN_REGEX` | optional, see step 4 |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `NVIDIA_API_KEY` | optional — not used by the backend code yet |
+
+Tip: `python scripts/deploy_env.py --write` checks your local env files and writes ready-to-paste `deploy-env/render.env` and `deploy-env/vercel.env`.
 
 4. **Create Web Service**.
 

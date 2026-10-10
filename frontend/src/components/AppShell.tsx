@@ -5,6 +5,7 @@ import { useSession } from '../hooks/useSession'
 import { ThemeToggle } from './ThemeToggle'
 import { SearchBar } from './SearchBar'
 import { LibraryAssistant } from './LibraryAssistant'
+import { InstallAppButton } from './InstallAppButton'
 
 const NAV_ITEMS = [
   { label: 'Library', icon: '📚', href: '/' },
@@ -118,6 +119,7 @@ export function AppShell() {
         {showMobileMenu && (
           <div className="px-4 pb-4 border-t border-slate-200 dark:border-white/10 space-y-4 animate-fade-up">
             <SidebarMenu onNavigate={() => setShowMobileMenu(false)} />
+            <InstallAppButton />
             <div className="flex items-center gap-2 pt-4 border-t border-slate-200 dark:border-white/10">
               <span className="text-sm text-slate-500 dark:text-slate-400 flex-1 truncate">{user?.email}</span>
               <button
@@ -142,6 +144,9 @@ export function AppShell() {
           <nav className="flex-1 p-4">
             <SidebarMenu />
           </nav>
+          <div className="px-4">
+            <InstallAppButton />
+          </div>
           <div className="p-4 m-3 rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center font-bold text-white ring-2 ring-violet-500/30">

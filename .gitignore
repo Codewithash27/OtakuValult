@@ -8,6 +8,7 @@ dist/
 !postcss.config.js
 src/**/*.js
 !src/**/*.config.js
+!frontend/public/sw.js
 
 # Python
 __pycache__/
@@ -29,6 +30,9 @@ backend/add_to_account.py
 backend/insert_items_direct.py
 backend/populate_library.py
 backend/seed_library.py
+
+# Generated deploy env files (contain secrets)
+deploy-env/
 
 # Supabase local
 supabase/.temp/

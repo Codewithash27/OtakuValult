@@ -14,6 +14,12 @@ import './index.css'
 
 const queryClient = new QueryClient()
 
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+  })
+}
+
 class AppErrorBoundary extends Component<{ children: ReactNode }, { message: string | null }> {
   state = { message: null as string | null }
 

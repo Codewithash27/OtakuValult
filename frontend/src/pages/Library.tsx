@@ -12,6 +12,7 @@ import { ErrorBanner } from '../components/ErrorBanner'
 import { Skeleton } from '../components/Skeleton'
 import { AddItemModal } from '../components/AddItemModal'
 import { ItemDrawer } from '../components/ItemDrawer'
+import { PosterWall } from '../components/PosterWall'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 
 const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa', 'movie', 'tv']
@@ -42,6 +43,15 @@ export default function Library() {
   const status = (searchParams.get('status') as Status | null) || 'all'
   const searchQ = searchParams.get('q') || ''
   const itemId = searchParams.get('item')
+  const showWall = searchParams.has('wall')
+
+  const setShowWall = (on: boolean) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (on) next.set('wall', '1')
+      else next.delete('wall')
+      return next
+    })
 
   const selectedItem = allItems.find((i) => i.id === itemId) || null
 
@@ -235,6 +245,14 @@ export default function Library() {
               )}
               <SortSelect value={sort} onChange={setSort} />
               <ViewToggle onChange={setView} />
+              <button
+                onClick={() => setShowWall(true)}
+                disabled={!sorted.length}
+                className="h-10 px-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-slate-900 to-violet-900 border border-violet-500/40 hover:shadow-[0_8px_30px_-8px_rgba(124,58,237,.8)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                title="Fullscreen poster wall"
+              >
+                🎞️ Cinema
+              </button>
             </div>
           </div>
           <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/10 to-transparent" />
@@ -288,6 +306,7 @@ export default function Library() {
 
       {/* Modals */}
       <AddItemModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+      {showWall && <PosterWall items={sorted} onClose={() => setShowWall(false)} />}
       <ItemDrawer item={selectedItem} />
     </>
   )

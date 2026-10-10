@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MediaItem } from '../types/media'
+import { MediaItem, anilistId } from '../types/media'
 import { WATCH_LINK_PREFIX, WATCH_LINKS_CHANGED_EVENT, schedulePrefsPush } from '../lib/prefsSync'
 
 interface Platform {
@@ -67,10 +67,8 @@ export function WatchLinks({ item }: { item: MediaItem }) {
   }
 
   const isReadable = item.media_type === 'manga' || item.media_type === 'manhwa'
-  const anilistUrl =
-    item.source === 'anilist' && item.external_id
-      ? `https://anilist.co/${item.media_type === 'anime' ? 'anime' : 'manga'}/${item.external_id}`
-      : null
+  const alId = anilistId(item)
+  const anilistUrl = alId !== null ? `https://anilist.co/${item.media_type === 'anime' ? 'anime' : 'manga'}/${alId}` : null
 
   return (
     <div className="rounded-2xl p-4 border border-slate-200 bg-white/50 dark:border-white/10 dark:bg-white/[0.03] space-y-3">

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { MediaType, Status } from '../types/media'
 import { MediaCard } from '../components/MediaCard'
@@ -291,6 +291,13 @@ export default function Library() {
                 <MediaRow item={item} />
               </div>
             ))}
+          </div>
+        )}
+        {allItems.length === 0 && (
+          <div className="-mt-10 pb-12 text-center">
+            <Link to="/import" className="text-sm font-semibold text-violet-500 hover:underline">
+              or import your list from AniList / MyAnimeList →
+            </Link>
           </div>
         )}
       </div>

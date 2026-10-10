@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { MediaItem } from '../types/media'
+import { MediaItem, anilistId } from '../types/media'
 import { MODE_KEY, OVERRIDES_KEY, PREFS_CHANGED_EVENT as CHANGE_EVENT, schedulePrefsPush } from '../lib/prefsSync'
 
 export type ContentMode = 'creamy' | 'clean'
@@ -81,10 +81,7 @@ async function fetchAniListAdult(ids: number[]): Promise<Record<string, boolean>
 export function useIsAdult(items: MediaItem[]) {
   const ids = useMemo(
     () =>
-      items
-        .filter((i) => i.source === 'anilist' && i.external_id && /^\d+$/.test(i.external_id))
-        .map((i) => Number(i.external_id))
-        .sort((a, b) => a - b),
+      [...new Set(items.map(anilistId).filter((id): id is number => id !== null))].sort((a, b) => a - b),
     [items]
   )
 
@@ -99,8 +96,10 @@ export function useIsAdult(items: MediaItem[]) {
   const overrides = useStored(readOverrides)
 
   return useCallback(
-    (item: MediaItem) =>
-      overrides[item.id] ?? (item.source === 'anilist' && item.external_id ? !!flags[item.external_id] : false),
+    (item: MediaItem) => {
+      const id = anilistId(item)
+      return overrides[item.id] ?? (id !== null ? !!flags[String(id)] : false)
+    },
     [flags, overrides]
   )
 }

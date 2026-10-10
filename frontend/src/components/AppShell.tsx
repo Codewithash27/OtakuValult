@@ -10,7 +10,7 @@ import { InstallAppButton } from './InstallAppButton'
 const NAV_ITEMS = [
   { label: 'Library', icon: '📚', href: '/' },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
-  { label: 'Import', icon: '⬆️', href: '#', disabled: true },
+  { label: 'Import', icon: '⬆️', href: '/import' },
 ]
 
 function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {

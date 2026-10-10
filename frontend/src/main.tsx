@@ -9,6 +9,7 @@ import { AppShell } from './components/AppShell'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Library from './pages/Library'
+import Import from './pages/Import'
 import NotFound from './pages/NotFound'
 import { initPrefsSync } from './lib/prefsSync'
 import './index.css'
@@ -67,6 +68,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
                   <Route path="/" element={<Library />} />
+                  <Route path="/import" element={<Import />} />
                 </Route>
               </Route>
               <Route path="*" element={<NotFound />} />

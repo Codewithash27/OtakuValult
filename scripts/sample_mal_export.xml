@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<myanimelist>
+  <myinfo>
+    <user_name>sample</user_name>
+    <user_export_type>1</user_export_type>
+  </myinfo>
+  <anime>
+    <series_animedb_id>5114</series_animedb_id>
+    <series_title><![CDATA[Fullmetal Alchemist: Brotherhood]]></series_title>
+    <series_type>TV</series_type>
+    <series_episodes>64</series_episodes>
+    <my_watched_episodes>64</my_watched_episodes>
+    <my_score>10</my_score>
+    <my_status>Completed</my_status>
+    <my_comments><![CDATA[All-time favourite]]></my_comments>
+  </anime>
+  <anime>
+    <series_animedb_id>16498</series_animedb_id>
+    <series_title><![CDATA[Shingeki no Kyojin]]></series_title>
+    <series_type>TV</series_type>
+    <series_episodes>25</series_episodes>
+    <my_watched_episodes>12</my_watched_episodes>
+    <my_score>8</my_score>
+    <my_status>Watching</my_status>
+    <my_comments><![CDATA[]]></my_comments>
+  </anime>
+  <anime>
+    <series_animedb_id>52991</series_animedb_id>
+    <series_title><![CDATA[Sousou no Frieren]]></series_title>
+    <series_type>TV</series_type>
+    <series_episodes>28</series_episodes>
+    <my_watched_episodes>0</my_watched_episodes>
+    <my_score>0</my_score>
+    <my_status>Plan to Watch</my_status>
+    <my_comments><![CDATA[]]></my_comments>
+  </anime>
+  <anime>
+    <series_animedb_id>1</series_animedb_id>
+    <series_title><![CDATA[Cowboy Bebop]]></series_title>
+    <series_type>TV</series_type>
+    <series_episodes>26</series_episodes>
+    <my_watched_episodes>9</my_watched_episodes>
+    <my_score>7</my_score>
+    <my_status>On-Hold</my_status>
+    <my_comments><![CDATA[]]></my_comments>
+  </anime>
+  <manga>
+    <manga_mangadb_id>2</manga_mangadb_id>
+    <manga_title><![CDATA[Berserk]]></manga_title>
+    <manga_chapters>0</manga_chapters>
+    <my_read_chapters>120</my_read_chapters>
+    <my_score>9</my_score>
+    <my_status>Reading</my_status>
+    <my_comments><![CDATA[]]></my_comments>
+  </manga>
+  <manga>
+    <manga_mangadb_id>121496</manga_mangadb_id>
+    <manga_title><![CDATA[Solo Leveling]]></manga_title>
+    <manga_chapters>201</manga_chapters>
+    <my_read_chapters>201</my_read_chapters>
+    <my_score>8</my_score>
+    <my_status>Completed</my_status>
+    <my_comments><![CDATA[]]></my_comments>
+  </manga>
+</myanimelist>

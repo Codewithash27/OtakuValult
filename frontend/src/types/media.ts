@@ -19,6 +19,13 @@ export interface MediaItem {
   updated_at: string
 }
 
+/** AniList numeric id from `external_id`, which is stored as `anime:123`, `manga:123` or `123`. */
+export function anilistId(item: Pick<MediaItem, 'source' | 'external_id'>): number | null {
+  if (item.source !== 'anilist' || !item.external_id) return null
+  const match = /^(?:anime:|manga:)?(\d+)$/.exec(item.external_id)
+  return match ? Number(match[1]) : null
+}
+
 export const STATUS_LABELS: Record<Status, string> = {
   watching: 'Watching',
   completed: 'Completed',

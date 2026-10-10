@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Component, ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
@@ -10,6 +10,25 @@ import { AddFromSearchDialog } from './AddFromSearchDialog'
 
 interface SearchBarProps {
   onOpenManualAdd?: () => void
+}
+
+class SearchPanelBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <p className="text-xs text-red-500 text-center py-4 px-3">
+          Could not show these results. Try a different title.
+        </p>
+      )
+    }
+    return this.props.children
+  }
 }
 
 export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
@@ -26,7 +45,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
 
   const debouncedQuery = useDebounce(query, 400)
   const { data: mediaItems = [] } = useMediaItems()
-  const { data: searchData, isLoading, error, refetch } = useGlobalSearch(
+  const { data: searchData, isLoading, isFetching, error, refetch } = useGlobalSearch(
     debouncedQuery,
     selectedType,
     showDropdown || showFullModal
@@ -50,6 +69,10 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
 
   // Internet results (first 8)
   const internetResults = searchData?.results.slice(0, 8) || []
+  const searchPending =
+    query.trim().length >= 2 &&
+    (query.trim() !== debouncedQuery.trim() ||
+      ((isLoading || isFetching) && internetResults.length === 0))
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -89,7 +112,13 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
         ref={inputRef}
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setShowDropdown(true)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.preventDefault()
+        }}
         onFocus={() => setShowDropdown(true)}
         placeholder="Search your library and the web..."
         className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -155,15 +184,28 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
 
               {/* Results */}
               <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
-                {isLoading ? (
+                {searchPending ? (
                   <p className="text-xs text-gray-500 text-center py-4">Searching...</p>
+                ) : error ? (
+                  <div className="text-center py-4 px-2">
+                    <p className="text-xs text-red-500">
+                      {error instanceof Error ? error.message : 'Search failed'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => refetch()}
+                      className="mt-2 text-xs text-sky-600 dark:text-sky-400"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : internetResults.length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-4">No results</p>
                 ) : (
-                  <>
+                  <SearchPanelBoundary>
                     {internetResults.map((result) => (
                       <SearchResultCard
-                        key={result.external_id}
+                        key={`${result.source}:${result.external_id}`}
                         result={result}
                         onAdd={handleAddResult}
                         isOnShelf={shelfItems.has(`${result.source}:${result.external_id}`)}
@@ -172,16 +214,14 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
                     ))}
                     {searchData && searchData.results.length > 8 && (
                       <button
-                        onClick={() => {
-                          setShowDropdown(false)
-                          setShowFullModal(true)
-                        }}
+                        type="button"
+                        onClick={() => setShowFullModal(true)}
                         className="w-full text-xs px-3 py-2 text-sky-600 dark:text-sky-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                       >
                         See all results ({searchData.results.length})
                       </button>
                     )}
-                  </>
+                  </SearchPanelBoundary>
                 )}
               </div>
 

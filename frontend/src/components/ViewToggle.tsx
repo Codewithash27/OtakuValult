@@ -24,13 +24,11 @@ export function ViewToggle({ onChange }: ViewToggleProps) {
   }
 
   return (
-    <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+    <div className="flex gap-1 p-1 rounded-xl border border-slate-200 bg-white/60 dark:border-white/10 dark:bg-white/[0.04]">
       <button
         onClick={() => handleToggle('grid')}
-        className={`px-3 py-1 rounded transition-colors ${
-          view === 'grid'
-            ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white'
-            : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+        className={`w-8 h-8 grid place-items-center rounded-lg text-sm transition-all ${
+          view === 'grid' ? 'chip-active !scale-100' : 'text-slate-500 dark:text-slate-400 hover:text-violet-500 dark:hover:text-white'
         }`}
         aria-label="Grid view"
       >
@@ -38,10 +36,8 @@ export function ViewToggle({ onChange }: ViewToggleProps) {
       </button>
       <button
         onClick={() => handleToggle('list')}
-        className={`px-3 py-1 rounded transition-colors ${
-          view === 'list'
-            ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white'
-            : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+        className={`w-8 h-8 grid place-items-center rounded-lg text-sm transition-all ${
+          view === 'list' ? 'chip-active !scale-100' : 'text-slate-500 dark:text-slate-400 hover:text-violet-500 dark:hover:text-white'
         }`}
         aria-label="List view"
       >

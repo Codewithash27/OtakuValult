@@ -16,7 +16,7 @@ export function SortSelect({ value, onChange }: SortSelectProps) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as SortOption)}
-      className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+      className="h-10 pl-3 pr-8 rounded-xl text-sm font-semibold cursor-pointer outline-none transition-all border border-slate-200 bg-white/60 text-slate-700 hover:border-violet-400 focus:ring-4 focus:ring-violet-500/20 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:[color-scheme:dark] [&>option]:bg-white dark:[&>option]:bg-[#141126]"
     >
       {sortOptions.map((opt) => (
         <option key={opt.value} value={opt.value}>

@@ -14,6 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
+    "noEmit": true,
     "types": ["vite/client"]
   },
   "include": ["src"],

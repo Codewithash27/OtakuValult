@@ -119,9 +119,9 @@ export function SearchResults({
                   </span>
                 )}
                 {result.rating && <span>•</span>}
-                {result.rating && (
+                {result.rating != null && result.rating > 0 && (
                   <div>
-                    <RatingStars rating={result.rating * 10} size="sm" />
+                    <RatingStars rating={result.rating} size="sm" />
                   </div>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SearchResponse, SearchResult } from '../types/search'
 import { SearchResultCard } from './SearchResultCard'
 import { ErrorBanner } from './ErrorBanner'
@@ -48,16 +49,16 @@ export function SearchResultsModal({
     return r.media_type === selectedType
   }) || []
 
-  return (
+  return createPortal(
     <>
       <div
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-[fadeIn_.25s_ease]"
         onClick={onClose}
         role="presentation"
       />
       <div
         ref={modalRef}
-        className="fixed inset-0 z-50 lg:inset-auto lg:right-0 lg:left-auto lg:top-16 lg:w-96 lg:max-h-[calc(100vh-4rem)] lg:rounded-b-lg bg-white dark:bg-gray-800 shadow-lg flex flex-col overflow-hidden"
+        className="fixed inset-0 z-50 lg:inset-auto lg:right-3 lg:top-3 lg:bottom-3 lg:w-[420px] lg:rounded-3xl glass-strong shadow-[0_30px_80px_-20px_rgba(124,58,237,.5)] flex flex-col overflow-hidden animate-[slideIn_.35s_cubic-bezier(.22,1,.36,1)]"
         role="dialog"
         aria-labelledby="search-results-title"
       >
@@ -141,6 +142,7 @@ export function SearchResultsModal({
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

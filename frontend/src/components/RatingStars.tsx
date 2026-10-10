@@ -4,9 +4,13 @@ interface RatingStarsProps {
 }
 
 export function RatingStars({ rating, size = 'md' }: RatingStarsProps) {
-  if (!rating) return <span className="text-gray-400">No rating</span>
+  if (rating == null || !Number.isFinite(rating) || rating <= 0) {
+    return <span className="text-gray-400">No rating</span>
+  }
 
-  const stars = Math.round((rating / 10) * 5)
+  // Accept either a 1–10 score or a value that was accidentally scaled by 10.
+  const normalized = rating > 10 ? rating / 10 : rating
+  const stars = Math.min(5, Math.max(0, Math.round((normalized / 10) * 5)))
   const sizeClass = size === 'sm' ? 'text-sm' : 'text-base'
 
   return (

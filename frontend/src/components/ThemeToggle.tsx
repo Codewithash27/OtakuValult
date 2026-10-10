@@ -1,39 +1,37 @@
 import { useState, useEffect } from 'react'
 
 export function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState(true)
 
   useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const shouldBeDark = saved ? saved === 'dark' : prefersDark
-
+    const shouldBeDark = localStorage.getItem('theme') !== 'light'
     setIsDark(shouldBeDark)
-    if (shouldBeDark) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    document.documentElement.classList.toggle('dark', shouldBeDark)
   }, [])
 
   const toggle = () => {
     const newIsDark = !isDark
     setIsDark(newIsDark)
     localStorage.setItem('theme', newIsDark ? 'dark' : 'light')
-    if (newIsDark) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    document.documentElement.classList.toggle('dark', newIsDark)
   }
 
   return (
     <button
       onClick={toggle}
-      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      className="relative w-10 h-10 grid place-items-center rounded-xl glass hover:scale-110 transition-transform duration-300 overflow-hidden"
       aria-label="Toggle theme"
     >
-      {isDark ? '☀️' : '🌙'}
+      <span
+        className={`absolute transition-all duration-500 ${isDark ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0 scale-50'}`}
+      >
+        ☀️
+      </span>
+      <span
+        className={`absolute transition-all duration-500 ${isDark ? 'rotate-90 opacity-0 scale-50' : 'rotate-0 opacity-100'}`}
+      >
+        🌙
+      </span>
     </button>
   )
 }

@@ -62,9 +62,9 @@ export function SearchResultCard({
             )}
           </div>
 
-          {result.rating && (
+          {result.rating != null && result.rating > 0 && (
             <div className="mb-1">
-              <RatingStars rating={result.rating * 10} size="sm" />
+              <RatingStars rating={result.rating} size="sm" />
             </div>
           )}
 

@@ -20,7 +20,19 @@ env/
 
 # Environment
 .env
-.env.example
+.env.local
+
+# Local one-off scripts (contain credentials)
+backend/add_items.py
+backend/add_library_items.py
+backend/add_to_account.py
+backend/insert_items_direct.py
+backend/populate_library.py
+backend/seed_library.py
+
+# Supabase local
+supabase/.temp/
+.vercel
 
 # OS
 .DS_Store

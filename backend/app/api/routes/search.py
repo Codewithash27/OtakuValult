@@ -1,5 +1,6 @@
 import asyncio
 from fastapi import APIRouter, Query, HTTPException
+from app.core.config import settings
 from app.schemas.search import SearchResponse, SearchResult
 from app.services.anilist import search_anilist
 from app.services.tmdb import search_tmdb
@@ -52,7 +53,9 @@ async def search(
             tasks.append(search_anilist(q, "manga"))
             providers.append(("anilist", "manga", cache_key))
 
-    if type in ("all", "movie"):
+    # Movie and TV need a TMDB key. Skip them on "all" so a missing key
+    # does not cover anime and manga results with an error.
+    if type in ("all", "movie") and settings.tmdb_api_key:
         cache_key = ("tmdb", "movie", q.lower())
         cached = cache.get(cache_key)
         if cached is not None:
@@ -60,8 +63,10 @@ async def search(
         else:
             tasks.append(search_tmdb(q, "movie"))
             providers.append(("tmdb", "movie", cache_key))
+    elif type == "movie":
+        errors["tmdb_movie"] = "TMDB key not configured"
 
-    if type in ("all", "tv"):
+    if type in ("all", "tv") and settings.tmdb_api_key:
         cache_key = ("tmdb", "tv", q.lower())
         cached = cache.get(cache_key)
         if cached is not None:
@@ -69,6 +74,8 @@ async def search(
         else:
             tasks.append(search_tmdb(q, "tv"))
             providers.append(("tmdb", "tv", cache_key))
+    elif type == "tv":
+        errors["tmdb_tv"] = "TMDB key not configured"
 
     # Execute uncached queries concurrently
     if tasks:

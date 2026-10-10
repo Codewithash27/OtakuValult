@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -7,11 +7,16 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     tmdb_api_key: str = ""
     nvidia_api_key: str = ""
+    # Comma-separated list, e.g. "http://localhost:5173,https://otakuvault.vercel.app"
     frontend_origin: str = "http://localhost:5173"
+    # Optional regex for Vercel preview URLs, e.g. "https://otaku-valult-.*\.vercel\.app"
+    frontend_origin_regex: str = ""
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 
 settings = Settings()

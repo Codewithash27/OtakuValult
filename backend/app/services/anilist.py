@@ -1,5 +1,5 @@
+import re
 import httpx
-from typing import Optional
 from app.schemas.search import SearchResult
 
 
@@ -18,7 +18,7 @@ async def search_anilist(query: str, media_type: str) -> list[SearchResult]:
     gql_query = """
     query Page($page: Int, $perPage: Int, $search: String, $type: MediaType) {
         Page(page: $page, perPage: $perPage) {
-            media(search: $search, type: $type, isAdult: false, sort: SEARCH_MATCH) {
+            media(search: $search, type: $type, sort: SEARCH_MATCH) {
                 id
                 title {
                     romaji
@@ -64,7 +64,9 @@ async def search_anilist(query: str, media_type: str) -> list[SearchResult]:
                 return []
 
             results: list[SearchResult] = []
-            for media in data.get("data", {}).get("Page", {}).get("media", []):
+            for media in data.get("data", {}).get("Page", {}).get("media") or []:
+                if not media:
+                    continue
                 is_anime = media_type == "anime"
                 country = media.get("countryOfOrigin", "")
 
@@ -74,14 +76,18 @@ async def search_anilist(query: str, media_type: str) -> list[SearchResult]:
                 else:
                     result_type = media_type
 
-                title = media.get("title", {})
-                title_main = title.get("english") or title.get("romaji", "")
+                title = media.get("title") or {}
+                title_main = title.get("english") or title.get("romaji") or ""
+                if not title_main:
+                    continue
                 title_alt = title.get("romaji") or title.get("english")
                 if title_main == title_alt:
                     title_alt = None
 
-                overview = media.get("description", "")
-                if overview and len(overview) > 300:
+                overview = media.get("description") or ""
+                overview = re.sub(r"<[^>]+>", " ", overview)
+                overview = re.sub(r"\s+", " ", overview).strip()
+                if len(overview) > 300:
                     overview = overview[:297] + "..."
 
                 total = media.get("episodes") if is_anime else media.get("chapters")

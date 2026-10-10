@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../hooks/useSession'
+import { AuthLayout } from '../components/AuthLayout'
 
 export default function Login() {
   const { session, loading } = useSession()
@@ -11,10 +12,19 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
-  // Redirect if already logged in
-  if (!loading && session) {
-    navigate('/')
-    return null
+  useEffect(() => {
+    if (!loading && session) {
+      navigate('/', { replace: true })
+    }
+  }, [loading, session, navigate])
+
+  if (loading || session) {
+    return (
+      <div className="min-h-screen flex flex-col gap-4 items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-violet-500/20 border-t-violet-500 animate-spin" />
+        <p className="text-gradient font-display font-semibold">Opening your library...</p>
+      </div>
+    )
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,21 +52,18 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-          Login
-        </h1>
+    <AuthLayout title="Welcome back" subtitle="Sign in to open your vault.">
+      <div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded mb-4 text-sm">
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-500 dark:text-rose-300 p-3 rounded-xl mb-4 text-sm animate-fade-up">
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
               Email
             </label>
             <input
@@ -64,13 +71,13 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400"
+              className="input-premium"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
               Password
             </label>
             <input
@@ -78,7 +85,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400"
+              className="input-premium"
               placeholder="••••••"
             />
           </div>
@@ -86,7 +93,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            className="btn-glow w-full !py-3"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
@@ -102,6 +109,6 @@ export default function Login() {
           </Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   )
 }

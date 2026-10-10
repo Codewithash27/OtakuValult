@@ -2,15 +2,21 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { MediaItem } from '../types/media'
 
+type NewMediaItem = Omit<MediaItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'source' | 'external_id'> & {
+  source?: string
+  external_id?: string | null
+}
+
 export function useAddItem() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (data: Omit<MediaItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'source' | 'external_id'>) => {
+    mutationFn: async (data: NewMediaItem) => {
+      const { source = 'manual', external_id = null, ...rest } = data
       const { error } = await supabase.from('media_items').insert({
-        ...data,
-        source: 'manual',
-        external_id: null,
+        ...rest,
+        source,
+        external_id,
       })
 
       if (error) throw error

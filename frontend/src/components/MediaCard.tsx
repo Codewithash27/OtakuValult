@@ -39,26 +39,59 @@ export function MediaCard({ item }: MediaCardProps) {
     })
   }
 
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const r = el.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width
+    const y = (e.clientY - r.top) / r.height
+    el.style.setProperty('--ry', `${(x - 0.5) * 14}deg`)
+    el.style.setProperty('--rx', `${(0.5 - y) * 14}deg`)
+    el.style.setProperty('--gx', `${x * 100}%`)
+    el.style.setProperty('--gy', `${y * 100}%`)
+  }
+
+  const handleLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.currentTarget.style.setProperty('--rx', '0deg')
+    e.currentTarget.style.setProperty('--ry', '0deg')
+  }
+
+  const iconBtn =
+    'w-10 h-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white hover:bg-white/30 hover:scale-110 transition-all duration-300'
+
   return (
     <>
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-all overflow-hidden cursor-pointer group"
+        className="card-3d card-ring glass rounded-2xl overflow-hidden cursor-pointer group"
         onClick={handleOpenDrawer}
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
       >
-        <div className="relative">
+        <div className="relative overflow-hidden">
           <PosterImage
             src={item.poster_url}
             alt={item.title}
             mediaType={item.media_type}
-            className="w-full aspect-[2/3]"
+            className="w-full aspect-[2/3] transition-transform duration-700 group-hover:scale-110"
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+          <div className="glare absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-black/50 backdrop-blur-md text-white border border-white/15">
+            {item.media_type}
+          </span>
+          {item.rating ? (
+            <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-lg">
+              ★ {item.rating}
+            </span>
+          ) : null}
+
+          <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 translate-y-3 group-hover:translate-y-0 transition-all duration-300">
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 handleOpenDrawer()
               }}
-              className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors"
+              className={iconBtn}
               aria-label="Edit"
             >
               ✎
@@ -68,28 +101,21 @@ export function MediaCard({ item }: MediaCardProps) {
                 e.stopPropagation()
                 setShowConfirmDelete(true)
               }}
-              className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors"
+              className={`${iconBtn} hover:!bg-rose-500/80`}
               aria-label="Delete"
             >
               🗑
             </button>
           </div>
-        </div>
-        <div className="p-4">
-          <h3 className="font-semibold text-gray-900 dark:text-white truncate mb-2">
-            {item.title}
-          </h3>
-          {item.year && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{item.year}</p>
-          )}
-          <div className="mb-3">
-            <StatusBadge status={item.status} size="sm" />
+
+          <div className="absolute bottom-0 inset-x-0 p-3" style={{ transform: 'translateZ(40px)' }}>
+            <h3 className="font-display font-semibold text-white truncate drop-shadow-lg">{item.title}</h3>
+            {item.year && <p className="text-xs text-white/70">{item.year}</p>}
           </div>
-          {item.rating && (
-            <div className="mb-3">
-              <RatingStars rating={item.rating} size="sm" />
-            </div>
-          )}
+        </div>
+        <div className="p-3 space-y-2.5">
+          <StatusBadge status={item.status} size="sm" />
+          {item.rating && <RatingStars rating={item.rating} size="sm" />}
           {item.total && <ProgressBar progress={item.progress} total={item.total} />}
         </div>
       </div>

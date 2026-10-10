@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SearchResult } from '../types/search'
 import { Status } from '../types/media'
 import { useAddItem } from '../hooks/useMediaMutations'
@@ -56,6 +57,8 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
         progress: 0,
         total: result.total,
         notes: result.overview || null,
+        source: result.source,
+        external_id: result.external_id,
       },
       {
         onSuccess: () => {
@@ -75,52 +78,57 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
 
   if (!isOpen || !result) return null
 
-  return (
+  const ratingNum = rating ? parseInt(rating) : 0
+  const label = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5'
+
+  return createPortal(
     <>
       <div
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] animate-[fadeIn_.25s_ease]"
         onClick={onClose}
         role="presentation"
       />
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none"
         role="dialog"
         aria-labelledby="add-dialog-title"
       >
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm w-full p-6">
-          <div className="flex gap-4 mb-4">
-            <PosterImage
-              src={result.poster_url}
-              alt={result.title}
-              mediaType={result.media_type as any}
-              className="w-20 h-32 rounded flex-shrink-0"
-            />
-            <div className="flex-1 min-w-0">
-              <h3 id="add-dialog-title" className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">
-                {result.title}
-              </h3>
-              {result.alt_title && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 mb-2">
-                  {result.alt_title}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 dark:text-gray-500">
-                From {result.source}
-              </p>
+        <div className="pointer-events-auto card-ring glass-strong rounded-3xl max-w-sm w-full max-h-[calc(100vh-2rem)] overflow-y-auto shadow-[0_30px_80px_-20px_rgba(124,58,237,.6)] animate-fade-up">
+          <div className="relative overflow-hidden rounded-t-3xl">
+            {result.poster_url && (
+              <img src={result.poster_url} alt="" className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-40" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white dark:to-[#0e0c1d]" />
+            <div className="relative flex gap-4 p-5">
+              <PosterImage
+                src={result.poster_url}
+                alt={result.title}
+                mediaType={result.media_type as any}
+                className="w-20 h-28 rounded-xl flex-shrink-0 shadow-[0_12px_30px_-8px_rgba(124,58,237,.7)] ring-1 ring-white/20"
+              />
+              <div className="flex-1 min-w-0 pt-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500 dark:text-violet-300">
+                  Add · {result.media_type}{result.year ? ` · ${result.year}` : ''}
+                </span>
+                <h3 id="add-dialog-title" className="font-display font-bold text-lg leading-snug line-clamp-2 mt-1">
+                  {result.title}
+                </h3>
+                {result.alt_title && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{result.alt_title}</p>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 px-5 pb-5">
             {/* Status */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Status
-              </label>
+              <label className={label}>Status</label>
               <select
                 ref={statusRef}
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Status)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+                className="input-premium !py-2 !px-3 text-sm cursor-pointer"
               >
                 <option value="plan_to_watch">Plan to Watch</option>
                 <option value="watching">Watching</option>
@@ -132,40 +140,43 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
 
             {/* Rating */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Rating (1-10)
+              <label className={label}>
+                Rating {ratingNum ? <span className="text-amber-400">· {ratingNum}/10</span> : <span className="normal-case font-medium">(optional)</span>}
               </label>
-              <input
-                type="number"
-                value={rating}
-                onChange={(e) => setRating(e.target.value)}
-                min="1"
-                max="10"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
-                placeholder="Optional"
-              />
+              <div className="flex items-center justify-between px-1">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setRating(ratingNum === n ? '' : String(n))}
+                    className={`text-lg leading-none transition-all hover:scale-150 ${
+                      n <= ratingNum ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,.7)]' : 'text-slate-300 dark:text-slate-600'
+                    }`}
+                    aria-label={`Rate ${n}`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={onClose}
                 disabled={isPending}
-                className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm font-semibold"
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={isPending}
-                className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white font-semibold transition-colors disabled:cursor-not-allowed text-sm"
-              >
-                {isPending ? 'Saving...' : 'Save'}
+              <button onClick={handleSave} disabled={isPending} className="btn-glow flex-1 !py-2.5 text-sm disabled:cursor-not-allowed">
+                {isPending ? 'Adding...' : '+ Add to shelf'}
               </button>
             </div>
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

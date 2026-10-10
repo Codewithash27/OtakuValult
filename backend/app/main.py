@@ -9,7 +9,8 @@ app = FastAPI(title="MediaShelf API", version="0.1.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=[o.strip().rstrip("/") for o in settings.frontend_origin.split(",") if o.strip()],
+    allow_origin_regex=settings.frontend_origin_regex or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

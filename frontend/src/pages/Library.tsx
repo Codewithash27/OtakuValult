@@ -12,6 +12,7 @@ import { ErrorBanner } from '../components/ErrorBanner'
 import { Skeleton } from '../components/Skeleton'
 import { AddItemModal } from '../components/AddItemModal'
 import { ItemDrawer } from '../components/ItemDrawer'
+import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 
 const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa', 'movie', 'tv']
 
@@ -21,7 +22,14 @@ export default function Library() {
   const [sort, setSort] = useState<SortOption>('recent')
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const { data: items = [], isLoading, error, refetch } = useMediaItems()
+  const { data: allItems = [], isLoading, error, refetch } = useMediaItems()
+  const [contentMode, setContentMode] = useContentMode()
+  const isAdult = useIsAdult(allItems)
+  const items = useMemo(
+    () => (contentMode === 'clean' ? allItems.filter((i) => !isAdult(i)) : allItems),
+    [allItems, contentMode, isAdult]
+  )
+  const hiddenCount = allItems.length - items.length
 
   useEffect(() => {
     const handleOpenAddModal = () => setShowAddModal(true)
@@ -35,7 +43,7 @@ export default function Library() {
   const searchQ = searchParams.get('q') || ''
   const itemId = searchParams.get('item')
 
-  const selectedItem = items.find((i) => i.id === itemId) || null
+  const selectedItem = allItems.find((i) => i.id === itemId) || null
 
   // Filter items
   const filtered = useMemo(() => {
@@ -125,54 +133,116 @@ export default function Library() {
       <div className="max-w-7xl mx-auto">
         {error && <ErrorBanner error={error as Error} onRetry={() => refetch()} />}
 
-        {/* Media type filter */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-            Type
-          </h2>
-          <div className="flex gap-2 flex-wrap">
-            {MEDIA_TYPES.map((type) => (
-              <button
-                key={type}
-                onClick={() => handleMediaTypeChange(type)}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  mediaType === type
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
-              </button>
-            ))}
+        {/* Hero */}
+        <section className="relative overflow-hidden rounded-3xl glass p-6 lg:p-8 mb-8 animate-fade-up">
+          <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-gradient-to-br from-violet-600/40 to-pink-500/30 blur-3xl animate-float" />
+          <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-violet-500 dark:text-violet-300 mb-2">
+                Your collection
+              </p>
+              <h1 className="text-4xl lg:text-5xl font-bold">
+                The <span className="text-gradient">Vault</span>
+              </h1>
+              <p className="mt-2 text-slate-500 dark:text-slate-400 max-w-md">
+                Every anime, manga, movie and show you love, in one place.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 stagger">
+              {[
+                { label: 'Total', value: counts.all, color: 'from-violet-500 to-fuchsia-500' },
+                { label: 'Watching', value: counts.watching, color: 'from-cyan-400 to-sky-500' },
+                { label: 'Completed', value: counts.completed, color: 'from-emerald-400 to-teal-500' },
+              ].map((s, i) => (
+                <div
+                  key={s.label}
+                  style={{ animationDelay: `${150 + i * 100}ms` }}
+                  className="rounded-2xl px-4 py-3 min-w-[92px] bg-white/60 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 hover:-translate-y-1 transition-transform duration-300"
+                >
+                  <div className={`text-3xl font-display font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>
+                    {s.value}
+                  </div>
+                  <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Status filter */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-            Status
-          </h2>
+        {/* Filter toolbar */}
+        <div className="glass rounded-2xl p-3 mb-6 space-y-3 animate-fade-up">
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex gap-1 p-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/20 overflow-x-auto">
+              {MEDIA_TYPES.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => handleMediaTypeChange(type)}
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-300 ${
+                    mediaType === type
+                      ? 'chip-active !scale-100'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {type === 'all' ? 'All' : type === 'tv' ? 'TV' : type.charAt(0).toUpperCase() + type.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 md:ml-auto flex-wrap">
+              <div
+                role="radiogroup"
+                aria-label="Content mode"
+                className="relative flex p-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/20"
+                title={hiddenCount ? `${hiddenCount} adult item(s) hidden` : 'Creamy shows 18+, Clean hides it'}
+              >
+                <span
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ${
+                    contentMode === 'creamy'
+                      ? 'left-1 bg-gradient-to-r from-rose-500 to-pink-600 shadow-[0_4px_16px_-4px_rgba(244,63,94,.7)]'
+                      : 'left-[calc(50%)] bg-gradient-to-r from-emerald-400 to-cyan-500 shadow-[0_4px_16px_-4px_rgba(34,211,238,.7)]'
+                  }`}
+                />
+                {(['creamy', 'clean'] as const).map((m) => (
+                  <button
+                    key={m}
+                    role="radio"
+                    aria-checked={contentMode === m}
+                    onClick={() => setContentMode(m)}
+                    className={`relative z-10 w-[92px] py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                      contentMode === m ? 'text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span
+                      className={`w-3 h-3 rounded-full border-2 grid place-items-center ${
+                        contentMode === m ? 'border-white' : 'border-current'
+                      }`}
+                    >
+                      {contentMode === m && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                    {m === 'creamy' ? 'Creamy' : 'Clean'}
+                    {m === 'clean' && hiddenCount > 0 && contentMode === 'clean' && (
+                      <span className="text-[10px] px-1 rounded bg-white/25">-{hiddenCount}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {(mediaType !== 'all' || status !== 'all' || searchQ) && (
+                <button
+                  onClick={handleClearFilters}
+                  className="h-10 px-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
+                >
+                  ✕ Clear
+                </button>
+              )}
+              <SortSelect value={sort} onChange={setSort} />
+              <ViewToggle onChange={setView} />
+            </div>
+          </div>
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/10 to-transparent" />
           <FilterChips
             selectedStatus={status as Status | 'all'}
             onStatusChange={handleStatusChange}
             counts={counts}
           />
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
-          <div className="flex gap-2 items-center flex-wrap">
-            <ViewToggle onChange={setView} />
-            <SortSelect value={sort} onChange={setSort} />
-          </div>
-          {(mediaType !== 'all' || status !== 'all' || searchQ) && (
-            <button
-              onClick={handleClearFilters}
-              className="text-sm text-sky-600 dark:text-sky-400 hover:underline font-semibold"
-            >
-              Clear filters
-            </button>
-          )}
         </div>
 
         {/* Items */}
@@ -189,15 +259,19 @@ export default function Library() {
             onAddClick={items.length === 0 ? () => setShowAddModal(true) : undefined}
           />
         ) : view === 'grid' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {sorted.map((item) => (
-              <MediaCard key={item.id} item={item} />
+          <div key={`${mediaType}-${status}-${sort}`} className="stagger grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+            {sorted.map((item, i) => (
+              <div key={item.id} style={{ animationDelay: `${Math.min(i, 15) * 45}ms` }}>
+                <MediaCard item={item} />
+              </div>
             ))}
           </div>
         ) : (
-          <div className="space-y-4">
-            {sorted.map((item) => (
-              <MediaRow key={item.id} item={item} />
+          <div key={`${mediaType}-${status}-${sort}`} className="stagger space-y-4">
+            {sorted.map((item, i) => (
+              <div key={item.id} style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }}>
+                <MediaRow item={item} />
+              </div>
             ))}
           </div>
         )}
@@ -206,7 +280,7 @@ export default function Library() {
       {/* Floating action button (mobile) */}
       <button
         onClick={() => setShowAddModal(true)}
-        className="lg:hidden fixed bottom-24 right-4 w-14 h-14 bg-sky-600 hover:bg-sky-700 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-colors"
+        className="lg:hidden fixed bottom-28 right-5 w-14 h-14 btn-glow !rounded-full !p-0 text-2xl animate-float"
         aria-label="Add item"
       >
         +

@@ -5,6 +5,8 @@ import { useUpdateItem, useDeleteItem } from '../hooks/useMediaMutations'
 import { useToast } from './Toast'
 import { PosterImage } from './PosterImage'
 import { ConfirmDialog } from './ConfirmDialog'
+import { WatchLinks } from './WatchLinks'
+import { AdultToggle } from './AdultToggle'
 
 interface ItemDrawerProps {
   item: MediaItem | null
@@ -141,125 +143,130 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
     }
   }
 
+  const handleProgressDecrement = () => {
+    if (progress > 0) {
+      setProgress(progress - 1)
+      setIsDirty(true)
+    }
+  }
+
+  const requestClose = () => (isDirty ? setShowConfirmDiscard(true) : closeDrawer())
+
   if (!isOpen || !item) return null
+
+  const label = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5'
+  const field = 'input-premium !py-2 !px-3 text-sm'
+  const stepBtn =
+    'w-9 h-9 shrink-0 grid place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/[0.04] font-bold text-slate-600 dark:text-slate-300 hover:border-violet-400 hover:text-violet-500 disabled:opacity-40 transition-all'
+  const pct = total ? Math.min(100, Math.round((progress / total) * 100)) : 0
 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-        onClick={closeDrawer}
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm animate-[fadeIn_.25s_ease]"
+        onClick={requestClose}
         role="presentation"
       />
       <div
         ref={drawerRef}
-        className="fixed inset-y-0 right-0 w-full lg:w-96 bg-white dark:bg-gray-800 shadow-xl z-50 overflow-y-auto flex flex-col"
+        className="fixed inset-y-0 right-0 z-50 w-full sm:w-[400px] sm:inset-y-3 sm:right-3 sm:rounded-3xl glass-strong shadow-[0_30px_80px_-20px_rgba(124,58,237,.5)] flex flex-col overflow-hidden animate-[slideIn_.35s_cubic-bezier(.22,1,.36,1)]"
         role="dialog"
         aria-labelledby="drawer-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 id="drawer-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-            Edit Item
-          </h2>
-          <button
-            onClick={() => {
-              if (isDirty) {
-                setShowConfirmDiscard(true)
-              } else {
-                closeDrawer()
-              }
-            }}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-            aria-label="Close drawer"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 p-6 space-y-6">
-          {/* Poster */}
-          <div className="flex justify-center">
+        <div className="relative shrink-0 overflow-hidden">
+          {item.poster_url && (
+            <img src={item.poster_url} alt="" className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-40" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white dark:to-[#0e0c1d]" />
+          <div className="relative flex gap-4 p-4">
             <PosterImage
               src={item.poster_url}
               alt={item.title}
               mediaType={item.media_type}
-              className="w-32 h-48 rounded-lg shadow"
+              className="w-20 h-28 shrink-0 rounded-xl shadow-[0_12px_30px_-8px_rgba(124,58,237,.7)] ring-1 ring-white/20"
             />
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value)
-                setIsDirty(true)
-              }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              Status
-            </label>
-            <select
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as Status)
-                setIsDirty(true)
-              }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value="plan_to_watch">Plan to Watch</option>
-              <option value="watching">Watching</option>
-              <option value="completed">Completed</option>
-              <option value="on_hold">On Hold</option>
-              <option value="dropped">Dropped</option>
-            </select>
-          </div>
-
-          {/* Rating */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              Rating (1-10)
-            </label>
-            <input
-              type="number"
-              value={rating || ''}
-              onChange={(e) => {
-                setRating(e.target.value ? parseInt(e.target.value) : null)
-                setIsDirty(true)
-              }}
-              min="1"
-              max="10"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </div>
-
-          {/* Progress */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Progress
-              </label>
-              {total && (
+            <div className="flex-1 min-w-0 pt-1">
+              <div className="flex items-start justify-between gap-2">
+                <span id="drawer-title" className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500 dark:text-violet-300">
+                  Edit · {item.media_type}{item.year ? ` · ${item.year}` : ''}
+                </span>
                 <button
-                  onClick={handleProgressIncrement}
-                  disabled={progress >= total}
-                  className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded transition-colors"
+                  onClick={requestClose}
+                  className="w-8 h-8 -mt-1 -mr-1 shrink-0 grid place-items-center rounded-lg hover:bg-black/10 dark:hover:bg-white/10 hover:rotate-90 transition-all duration-300"
+                  aria-label="Close drawer"
                 >
-                  +1
+                  ✕
                 </button>
-              )}
+              </div>
+              <textarea
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value)
+                  setIsDirty(true)
+                }}
+                rows={2}
+                className="mt-1 w-full resize-none bg-transparent font-display font-bold text-lg leading-snug text-slate-900 dark:text-white outline-none rounded-lg px-1 -mx-1 hover:bg-black/5 dark:hover:bg-white/5 focus:bg-black/5 dark:focus:bg-white/5 transition-colors"
+                aria-label="Title"
+              />
             </div>
-            <div className="flex gap-2">
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+          <WatchLinks item={item} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Status</label>
+              <select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value as Status)
+                  setIsDirty(true)
+                }}
+                className={`${field} cursor-pointer dark:[color-scheme:dark]`}
+              >
+                <option value="plan_to_watch">Plan to Watch</option>
+                <option value="watching">Watching</option>
+                <option value="completed">Completed</option>
+                <option value="on_hold">On Hold</option>
+                <option value="dropped">Dropped</option>
+              </select>
+            </div>
+            <div>
+              <label className={label}>Rating {rating ? <span className="text-amber-400">· {rating}/10</span> : null}</label>
+              <div className="flex h-[38px] items-center justify-between px-1">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setRating(rating === n ? null : n)
+                      setIsDirty(true)
+                    }}
+                    className={`text-sm leading-none transition-all hover:scale-150 ${
+                      rating && n <= rating ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,.7)]' : 'text-slate-300 dark:text-slate-600'
+                    }`}
+                    aria-label={`Rate ${n}`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <label className={label}>Progress</label>
+              {total ? <span className="text-[11px] font-bold text-violet-500 dark:text-violet-300">{pct}%</span> : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleProgressDecrement} disabled={progress <= 0} className={stepBtn}>
+                −
+              </button>
               <input
                 type="number"
                 value={progress}
@@ -268,58 +275,70 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
                   setIsDirty(true)
                 }}
                 min="0"
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className={`${field} text-center`}
               />
-              {total && (
-                <>
-                  <span className="flex items-center text-gray-600 dark:text-gray-400">/</span>
-                  <input
-                    type="number"
-                    value={total || ''}
-                    onChange={(e) => {
-                      setTotal(e.target.value ? parseInt(e.target.value) : null)
-                      setIsDirty(true)
-                    }}
-                    min="0"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                </>
-              )}
+              <span className="text-slate-400">/</span>
+              <input
+                type="number"
+                value={total || ''}
+                placeholder="?"
+                onChange={(e) => {
+                  setTotal(e.target.value ? parseInt(e.target.value) : null)
+                  setIsDirty(true)
+                }}
+                min="0"
+                className={`${field} text-center`}
+              />
+              <button
+                type="button"
+                onClick={total ? handleProgressIncrement : () => { setProgress(progress + 1); setIsDirty(true) }}
+                disabled={!!total && progress >= total}
+                className={stepBtn}
+              >
+                +
+              </button>
             </div>
+            {total ? (
+              <div className="mt-2 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 transition-all duration-500" style={{ width: `${pct}%` }} />
+              </div>
+            ) : null}
           </div>
 
-          {/* Notes */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              Notes
-            </label>
+            <label className={label}>Notes</label>
             <textarea
               value={notes}
               onChange={(e) => {
                 setNotes(e.target.value)
                 setIsDirty(true)
               }}
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+              rows={3}
+              placeholder="Thoughts, favourite arc, where you left off..."
+              className={`${field} resize-none`}
             />
           </div>
+
+          <AdultToggle item={item} />
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-2">
-          <button
-            onClick={handleSave}
-            disabled={!isDirty || isUpdating}
-            className="w-full px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-semibold rounded-lg transition-colors disabled:cursor-not-allowed"
-          >
-            {isUpdating ? 'Saving...' : 'Save changes'}
-          </button>
+        <div className="shrink-0 p-4 flex gap-2 border-t border-slate-200 dark:border-white/10">
           <button
             onClick={() => setShowConfirmDelete(true)}
             disabled={isDeleting}
-            className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-semibold rounded-lg transition-colors disabled:cursor-not-allowed"
+            className="w-11 h-11 shrink-0 grid place-items-center rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white transition-all disabled:opacity-50"
+            aria-label="Delete"
+            title="Delete"
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isDeleting ? '…' : '🗑'}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!isDirty || isUpdating}
+            className="btn-glow flex-1 !py-2.5 disabled:cursor-not-allowed disabled:!shadow-none"
+          >
+            {isUpdating ? 'Saving...' : isDirty ? 'Save changes' : 'No changes'}
           </button>
         </div>
       </div>

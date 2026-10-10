@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { MediaType, Status } from '../types/media'
 import { useAddItem } from '../hooks/useMediaMutations'
 import { useToast } from './Toast'
-import { SearchModal } from './SearchModal'
 
 interface AddItemModalProps {
   isOpen: boolean
@@ -15,7 +14,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const titleRef = useRef<HTMLInputElement>(null)
   const { mutate: addItem, isPending } = useAddItem()
   const { showToast } = useToast()
-  const [showSearch, setShowSearch] = useState(false)
 
   const [mediaType, setMediaType] = useState<MediaType>('anime')
   const [title, setTitle] = useState('')
@@ -28,10 +26,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
-    if (isOpen && !showSearch) {
+    if (isOpen) {
       titleRef.current?.focus()
     }
-  }, [isOpen, showSearch])
+  }, [isOpen])
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -113,18 +111,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   }
 
   if (!isOpen) return null
-
-  if (showSearch) {
-    return (
-      <SearchModal
-        isOpen={showSearch}
-        onClose={() => {
-          setShowSearch(false)
-          onClose()
-        }}
-      />
-    )
-  }
 
   return (
     <>
@@ -295,13 +281,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
             {/* Buttons */}
             <div className="flex gap-3 justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setShowSearch(true)}
-                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors font-semibold"
-              >
-                🔍 Search
-              </button>
               <button
                 type="button"
                 onClick={onClose}

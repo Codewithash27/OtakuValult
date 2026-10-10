@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -44,12 +45,23 @@ function SidebarMenu({ onNavigate }: SidebarMenuProps) {
 export function AppShell() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [, setSearchParams] = useSearchParams()
   const { user, signOut } = useSession()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
     await signOut()
     navigate('/login')
+  }
+
+  const handleAddItem = () => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('item')
+      return next
+    })
+    // This signal is used by Library to open the modal
+    window.dispatchEvent(new CustomEvent('openAddModal'))
   }
 
   return (
@@ -59,6 +71,13 @@ export function AppShell() {
         <div className="flex items-center justify-between p-4 gap-4">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">MediaShelf</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleAddItem}
+              className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-sm rounded transition-colors"
+              aria-label="Add item"
+            >
+              + Add
+            </button>
             <ThemeToggle />
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
@@ -112,8 +131,8 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col">
-        {/* Top bar (search) */}
-        <header className="hidden lg:flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+        {/* Top bar (search + add) */}
+        <header className="hidden lg:flex bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 gap-4 items-center">
           <input
             type="text"
             placeholder="Search your library..."
@@ -121,6 +140,12 @@ export function AppShell() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
+          <button
+            onClick={handleAddItem}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-lg transition-colors"
+          >
+            + Add item
+          </button>
         </header>
 
         {/* Page content */}

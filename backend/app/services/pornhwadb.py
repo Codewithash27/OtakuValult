@@ -41,16 +41,25 @@ def _download_from_url(url: str, dest: Path) -> None:
 
 
 def _download_from_supabase_storage(bucket: str, object_path: str, dest: Path) -> None:
+    """Storage REST download — avoids supabase-py / httpx proxy kwarg mismatch on Render."""
     if not settings.supabase_url or not settings.supabase_service_role_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required for storage download")
-    from supabase import create_client
-
-    client = create_client(settings.supabase_url, settings.supabase_service_role_key)
-    data = client.storage.from_(bucket).download(object_path)
-    if not data:
-        raise RuntimeError(f"Empty download from {bucket}/{object_path}")
+    base = settings.supabase_url.rstrip("/")
+    key = settings.supabase_service_role_key.strip()
+    path_part = object_path.lstrip("/")
+    url = f"{base}/storage/v1/object/{bucket}/{path_part}"
+    headers = {"Authorization": f"Bearer {key}", "apikey": key}
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
+    with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=180.0) as response:
+        if response.status_code == 404:
+            raise RuntimeError(f"Object not found: {bucket}/{path_part}")
+        response.raise_for_status()
+        with dest.open("wb") as out:
+            for chunk in response.iter_bytes():
+                out.write(chunk)
+    if dest.stat().st_size == 0:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(f"Empty download from {bucket}/{path_part}")
 
 
 def ensure_export_file() -> bool:

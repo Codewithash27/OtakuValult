@@ -3,8 +3,8 @@ import { ReactNode } from 'react'
 const CARDS = [
   { g: 'from-violet-600 via-fuchsia-500 to-pink-500', label: 'Anime', icon: '⛩️' },
   { g: 'from-cyan-500 via-sky-500 to-indigo-600', label: 'Manga', icon: '📖' },
-  { g: 'from-amber-400 via-orange-500 to-rose-600', label: 'Movies', icon: '🎬' },
-  { g: 'from-emerald-400 via-teal-500 to-cyan-600', label: 'Shows', icon: '📺' },
+  { g: 'from-amber-400 via-orange-500 to-rose-600', label: 'Webtoons', icon: '📱' },
+  { g: 'from-emerald-400 via-teal-500 to-cyan-600', label: 'Your shelf', icon: '📚' },
   { g: 'from-pink-500 via-rose-500 to-violet-600', label: 'Manhwa', icon: '✨' },
 ]
 

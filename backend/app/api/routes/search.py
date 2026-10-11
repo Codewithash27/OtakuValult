@@ -53,9 +53,8 @@ async def search(
             tasks.append(search_anilist(q, "manga"))
             providers.append(("anilist", "manga", cache_key))
 
-    # Movie and TV need a TMDB key. Skip them on "all" so a missing key
-    # does not cover anime and manga results with an error.
-    if type in ("all", "movie") and settings.tmdb_api_key:
+    # Movie and TV are only searched when asked for explicitly; the app tracks anime, manga and manhwa.
+    if type == "movie" and settings.tmdb_api_key:
         cache_key = ("tmdb", "movie", q.lower())
         cached = cache.get(cache_key)
         if cached is not None:
@@ -66,7 +65,7 @@ async def search(
     elif type == "movie":
         errors["tmdb_movie"] = "TMDB key not configured"
 
-    if type in ("all", "tv") and settings.tmdb_api_key:
+    if type == "tv" and settings.tmdb_api_key:
         cache_key = ("tmdb", "tv", q.lower())
         cached = cache.get(cache_key)
         if cached is not None:

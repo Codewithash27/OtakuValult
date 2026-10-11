@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
-import { MediaType, Status } from '../types/media'
+import { MediaItem, MediaType, Status } from '../types/media'
 import { MediaCard } from '../components/MediaCard'
 import { MediaRow } from '../components/MediaRow'
 import { FilterChips } from '../components/FilterChips'
@@ -13,12 +13,25 @@ import { Skeleton } from '../components/Skeleton'
 import { AddItemModal } from '../components/AddItemModal'
 import { ItemDrawer } from '../components/ItemDrawer'
 import { PosterWall } from '../components/PosterWall'
-import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
+import { ThemeFilter, ThemeRows } from '../components/ThemeBrowser'
+import { useContentMode, useIsAdult, useItemMeta } from '../hooks/useAdultFilter'
+import { THEMES, hasTheme } from '../lib/themes'
 
-const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa', 'movie', 'tv']
+const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa']
 const PAGE_SIZE = 60
 
-export default function Library() {
+const HERO: Record<MediaType | 'all', { title: string; blurb: string }> = {
+  all: { title: 'Vault', blurb: 'Every anime, manga and manhwa you love, in one place.' },
+  anime: { title: 'Anime', blurb: 'Everything you watch, from airing seasons to all-time classics.' },
+  manga: { title: 'Manga', blurb: 'Your reading shelf, chapter by chapter.' },
+  manhwa: { title: 'Manhwa', blurb: 'Your webtoons and manhwa, sorted by the themes you like.' },
+  movie: { title: 'Vault', blurb: '' },
+  tv: { title: 'Vault', blurb: '' },
+}
+
+const splitParam = (v: string | null) => (v ? v.split(',').filter(Boolean) : [])
+
+export default function Library({ fixedType }: { fixedType?: MediaType }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [sort, setSort] = useState<SortOption>('recent')
@@ -27,6 +40,9 @@ export default function Library() {
   const { data: allItems = [], isLoading, error, refetch } = useMediaItems()
   const [contentMode, setContentMode] = useContentMode()
   const isAdult = useIsAdult(allItems)
+  const metaOf = useItemMeta(allItems)
+  const tagsOf = useCallback((i: MediaItem) => metaOf(i)?.t, [metaOf])
+  const [byTheme, setByTheme] = useState(false)
   const items = useMemo(
     () => (contentMode === 'clean' ? allItems.filter((i) => !isAdult(i)) : allItems),
     [allItems, contentMode, isAdult]
@@ -40,7 +56,11 @@ export default function Library() {
   }, [])
 
   // Parse URL params
-  const mediaType = (searchParams.get('type') as MediaType | null) || 'all'
+  const mediaType = fixedType ?? ((searchParams.get('type') as MediaType | null) || 'all')
+  const selectedThemes = splitParam(searchParams.get('themes'))
+  const selectedTags = splitParam(searchParams.get('tags'))
+  const themesKey = searchParams.get('themes') || ''
+  const tagsKey = searchParams.get('tags') || ''
   const status = (searchParams.get('status') as Status | null) || 'all'
   const searchQ = searchParams.get('q') || ''
   const itemId = searchParams.get('item')
@@ -56,12 +76,25 @@ export default function Library() {
 
   const selectedItem = allItems.find((i) => i.id === itemId) || null
 
+  const typeItems = useMemo(
+    () => (mediaType === 'all' ? items : items.filter((i) => i.media_type === mediaType)),
+    [items, mediaType]
+  )
+
+  const pendingTags = useMemo(
+    () => (fixedType ? typeItems.filter((i) => i.source === 'anilist' && !tagsOf(i)).length : 0),
+    [fixedType, typeItems, tagsOf]
+  )
+
   // Filter items
   const filtered = useMemo(() => {
-    let result = items
+    let result = typeItems
 
-    if (mediaType !== 'all') {
-      result = result.filter((i) => i.media_type === mediaType)
+    for (const theme of THEMES.filter((t) => themesKey.split(',').includes(t.id))) {
+      result = result.filter((i) => hasTheme(tagsOf(i), theme))
+    }
+    for (const tag of tagsKey.split(',').filter(Boolean)) {
+      result = result.filter((i) => tagsOf(i)?.includes(tag))
     }
 
     if (status !== 'all') {
@@ -78,7 +111,7 @@ export default function Library() {
     }
 
     return result
-  }, [items, mediaType, status, searchQ])
+  }, [typeItems, themesKey, tagsKey, tagsOf, status, searchQ])
 
   // Sort items
   const sorted = useMemo(() => {
@@ -93,7 +126,7 @@ export default function Library() {
 
   const [limit, setLimit] = useState(PAGE_SIZE)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => setLimit(PAGE_SIZE), [mediaType, status, searchQ, sort, contentMode])
+  useEffect(() => setLimit(PAGE_SIZE), [mediaType, status, searchQ, sort, contentMode, themesKey, tagsKey])
   useEffect(() => {
     const el = sentinelRef.current
     if (!el || limit >= sorted.length) return
@@ -109,18 +142,45 @@ export default function Library() {
   // Count by status
   const counts = useMemo(() => {
     const result: Record<Status | 'all', number> = {
-      all: items.length,
+      all: typeItems.length,
       watching: 0,
       completed: 0,
       on_hold: 0,
       dropped: 0,
       plan_to_watch: 0,
     }
-    items.forEach((i) => {
+    typeItems.forEach((i) => {
       result[i.status]++
     })
     return result
-  }, [items])
+  }, [typeItems])
+
+  const toggleListParam = (name: 'themes' | 'tags', value: string) => {
+    setByTheme(false)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      const list = splitParam(next.get(name))
+      const updated = list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
+      if (updated.length) next.set(name, updated.join(','))
+      else next.delete(name)
+      return next
+    })
+  }
+
+  const clearThemes = () =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('themes')
+      next.delete('tags')
+      return next
+    })
+
+  const openItem = (item: MediaItem) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('item', item.id)
+      return next
+    })
 
   const handleStatusChange = (newStatus: Status | 'all') => {
     setSearchParams((prev) => {
@@ -160,35 +220,30 @@ export default function Library() {
         {error && <ErrorBanner error={error as Error} onRetry={() => refetch()} />}
 
         {/* Hero */}
-        <section className="relative overflow-hidden rounded-3xl glass p-6 lg:p-8 mb-8 animate-fade-up">
-          <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-gradient-to-br from-violet-600/40 to-pink-500/30 blur-3xl animate-float" />
-          <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.3em] text-violet-500 dark:text-violet-300 mb-2">
-                Your collection
-              </p>
-              <h1 className="text-4xl lg:text-5xl font-bold">
-                The <span className="text-gradient">Vault</span>
+        <section className="relative overflow-hidden rounded-2xl glass px-4 py-3 lg:px-5 mb-4 animate-fade-up">
+          <div className="absolute -top-20 -right-10 w-48 h-48 rounded-full bg-gradient-to-br from-violet-600/30 to-pink-500/20 blur-3xl" />
+          <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl lg:text-3xl font-bold leading-tight">
+                The <span className="text-gradient">{HERO[mediaType].title}</span>
+                {fixedType && ' Vault'}
               </h1>
-              <p className="mt-2 text-slate-500 dark:text-slate-400 max-w-md">
-                Every anime, manga, movie and show you love, in one place.
-              </p>
+              <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400 truncate">{HERO[mediaType].blurb}</p>
             </div>
-            <div className="grid grid-cols-3 gap-3 stagger">
+            <div className="flex gap-2">
               {[
                 { label: 'Total', value: counts.all, color: 'from-violet-500 to-fuchsia-500' },
                 { label: 'Watching', value: counts.watching, color: 'from-cyan-400 to-sky-500' },
-                { label: 'Completed', value: counts.completed, color: 'from-emerald-400 to-teal-500' },
-              ].map((s, i) => (
+                { label: 'Done', value: counts.completed, color: 'from-emerald-400 to-teal-500' },
+              ].map((s) => (
                 <div
                   key={s.label}
-                  style={{ animationDelay: `${150 + i * 100}ms` }}
-                  className="rounded-2xl px-4 py-3 min-w-[92px] bg-white/60 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 hover:-translate-y-1 transition-transform duration-300"
+                  className="rounded-xl px-3 py-1.5 bg-white/60 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 flex items-baseline gap-1.5"
                 >
-                  <div className={`text-3xl font-display font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>
+                  <span className={`text-lg font-display font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>
                     {s.value}
-                  </div>
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.label}</div>
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.label}</span>
                 </div>
               ))}
             </div>
@@ -196,8 +251,13 @@ export default function Library() {
         </section>
 
         {/* Filter toolbar */}
-        <div className="glass rounded-2xl p-3 mb-6 space-y-3 animate-fade-up">
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
+        <div className="glass rounded-2xl p-2.5 mb-4 space-y-2 animate-fade-up">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+            {fixedType ? (
+              <div className="min-w-0 lg:flex-1">
+                <FilterChips compact selectedStatus={status as Status | 'all'} onStatusChange={handleStatusChange} counts={counts} />
+              </div>
+            ) : (
             <div className="flex gap-1 p-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/20 overflow-x-auto">
               {MEDIA_TYPES.map((type) => (
                 <button
@@ -209,11 +269,12 @@ export default function Library() {
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  {type === 'all' ? 'All' : type === 'tv' ? 'TV' : type.charAt(0).toUpperCase() + type.slice(1)}
+                  {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 md:ml-auto flex-wrap">
+            )}
+            <div className="flex items-center gap-2 lg:ml-auto flex-wrap shrink-0">
               <div
                 role="radiogroup"
                 aria-label="Content mode"
@@ -233,7 +294,7 @@ export default function Library() {
                     role="radio"
                     aria-checked={contentMode === m}
                     onClick={() => setContentMode(m)}
-                    className={`relative z-10 w-[92px] py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`relative z-10 w-[84px] py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${
                       contentMode === m ? 'text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -251,7 +312,7 @@ export default function Library() {
                   </button>
                 ))}
               </div>
-              {(mediaType !== 'all' || status !== 'all' || searchQ) && (
+              {((!fixedType && mediaType !== 'all') || status !== 'all' || searchQ || themesKey || tagsKey) && (
                 <button
                   onClick={handleClearFilters}
                   className="h-10 px-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
@@ -271,16 +332,34 @@ export default function Library() {
               </button>
             </div>
           </div>
-          <div className="h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/10 to-transparent" />
-          <FilterChips
-            selectedStatus={status as Status | 'all'}
-            onStatusChange={handleStatusChange}
-            counts={counts}
+          {!fixedType && (
+            <FilterChips compact selectedStatus={status as Status | 'all'} onStatusChange={handleStatusChange} counts={counts} />
+          )}
+          {fixedType && typeItems.length > 0 && (
+          <ThemeFilter
+            items={typeItems}
+            tagsOf={tagsOf}
+            selectedThemes={selectedThemes}
+            selectedTags={selectedTags}
+            onToggleTheme={(id) => toggleListParam('themes', id)}
+            onToggleTag={(name) => toggleListParam('tags', name)}
+            onClear={clearThemes}
+            pending={pendingTags}
+            byTheme={byTheme}
+            onToggleByTheme={() => setByTheme((b) => !b)}
           />
+          )}
         </div>
 
         {/* Items */}
-        {sorted.length === 0 ? (
+        {byTheme && fixedType && !themesKey && !tagsKey ? (
+          <ThemeRows
+            items={filtered}
+            tagsOf={tagsOf}
+            onOpen={openItem}
+            onSeeAll={(id) => toggleListParam('themes', id)}
+          />
+        ) : sorted.length === 0 ? (
           <EmptyState
             title={
               items.length === 0 ? 'Your shelf is empty' : 'No results found'
@@ -309,7 +388,7 @@ export default function Library() {
             ))}
           </div>
         )}
-        {shown.length < sorted.length && (
+        {!(byTheme && fixedType && !themesKey && !tagsKey) && shown.length < sorted.length && (
           <div ref={sentinelRef} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
             Showing {shown.length} of {sorted.length}…
           </div>

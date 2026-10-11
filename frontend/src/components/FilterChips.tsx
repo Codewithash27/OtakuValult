@@ -4,18 +4,21 @@ interface FilterChipsProps {
   selectedStatus: Status | 'all'
   onStatusChange: (status: Status | 'all') => void
   counts: Record<Status | 'all', number>
+  compact?: boolean
 }
 
 const statuses: (Status | 'all')[] = ['all', 'watching', 'completed', 'on_hold', 'dropped', 'plan_to_watch']
 
-export function FilterChips({ selectedStatus, onStatusChange, counts }: FilterChipsProps) {
+export function FilterChips({ selectedStatus, onStatusChange, counts, compact }: FilterChipsProps) {
   return (
-    <div className="flex gap-2 overflow-x-auto p-1">
+    <div className={`flex overflow-x-auto p-1 ${compact ? 'gap-1.5' : 'gap-2'}`}>
       {statuses.map((status) => (
         <button
           key={status}
           onClick={() => onStatusChange(status)}
-          className={`chip flex items-center gap-2 ${selectedStatus === status ? 'chip-active' : ''}`}
+          className={`chip flex items-center ${compact ? '!px-3 !py-1 !text-xs gap-1.5' : 'gap-2'} ${
+            selectedStatus === status ? 'chip-active !scale-100' : ''
+          }`}
         >
           {status === 'all' ? 'All' : STATUS_LABELS[status]}
           <span className="text-[11px] px-1.5 rounded-md bg-black/10 dark:bg-white/10">{counts[status]}</span>

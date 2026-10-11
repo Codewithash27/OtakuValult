@@ -8,7 +8,7 @@ interface AddItemModalProps {
   onClose: () => void
 }
 
-const MEDIA_TYPES: MediaType[] = ['anime', 'manga', 'manhwa', 'movie', 'tv']
+const MEDIA_TYPES: MediaType[] = ['anime', 'manga', 'manhwa']
 
 export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const titleRef = useRef<HTMLInputElement>(null)

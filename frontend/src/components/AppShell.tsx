@@ -7,8 +7,11 @@ import { SearchBar } from './SearchBar'
 import { LibraryAssistant } from './LibraryAssistant'
 import { InstallAppButton } from './InstallAppButton'
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean }[] = [
   { label: 'Library', icon: '📚', href: '/' },
+  { label: 'Anime', icon: '⛩️', href: '/anime' },
+  { label: 'Manga', icon: '📖', href: '/manga' },
+  { label: 'Manhwa', icon: '✨', href: '/manhwa' },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
   { label: 'Import', icon: '⬆️', href: '/import' },
 ]
@@ -74,6 +77,7 @@ export function AppShell() {
   const [, setSearchParams] = useSearchParams()
   const { user, signOut } = useSession()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   const handleLogout = async () => {
     await signOut()
@@ -185,13 +189,12 @@ export function AppShell() {
 
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-3 left-3 right-3 z-40 glass-strong rounded-2xl flex shadow-2xl">
-        {[...NAV_ITEMS, { label: 'Me', icon: '👤', href: '#', disabled: true }].map((item) => (
+        {NAV_ITEMS.filter((item) => !item.disabled).map((item) => (
           <Link
             key={item.label}
             to={item.href}
-            onClick={(e) => item.disabled && e.preventDefault()}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-semibold transition-all ${
-              item.disabled ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed' : 'text-violet-500 dark:text-violet-300'
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-semibold transition-all ${
+              pathname === item.href ? 'text-violet-500 dark:text-violet-300 scale-110' : 'text-slate-500 dark:text-slate-400'
             }`}
           >
             <span className="text-lg">{item.icon}</span>

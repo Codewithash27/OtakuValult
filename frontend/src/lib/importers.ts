@@ -1,5 +1,5 @@
 import { MediaType, Status } from '../types/media'
-import { ADULT_GENRES } from '../hooks/useAdultFilter'
+import { metaFromMedia } from './anilistMeta'
 
 export interface ImportEntry {
   key: string
@@ -17,6 +17,7 @@ export interface ImportEntry {
   adult: boolean
   /** Boys' love or yuri, from AniList tags. */
   sameSex: boolean
+  tags: string[]
   /** Pasted line this entry was found from, with the other AniList matches to choose from. */
   query?: string
   alternatives?: ImportEntry[]
@@ -36,14 +37,14 @@ interface AniListMedia {
   countryOfOrigin: string | null
   isAdult: boolean | null
   genres: string[] | null
-  tags: { name: string }[] | null
+  tags: { name: string; rank: number | null }[] | null
 }
 
 const SAME_SEX_TAGS = ["Boys' Love", 'Shounen Ai', 'Yuri', 'Shoujo Ai', "Girls' Love"]
 
 const ANILIST_URL = 'https://graphql.anilist.co'
 
-const MEDIA_FIELDS = `id idMal type title { romaji english } coverImage { large } startDate { year } episodes chapters countryOfOrigin isAdult genres tags { name }`
+const MEDIA_FIELDS = `id idMal type title { romaji english } coverImage { large } startDate { year } episodes chapters countryOfOrigin isAdult genres tags { name rank }`
 
 const LIST_QUERY = `
 query ($user: String, $type: MediaType, $chunk: Int) {
@@ -85,12 +86,13 @@ const toRating = (score: number | null | undefined) =>
 
 type MediaPart = Pick<
   ImportEntry,
-  'key' | 'source' | 'external_id' | 'media_type' | 'title' | 'poster_url' | 'year' | 'total' | 'adult' | 'sameSex'
+  'key' | 'source' | 'external_id' | 'media_type' | 'title' | 'poster_url' | 'year' | 'total' | 'adult' | 'sameSex' | 'tags'
 >
 
 function fromMedia(media: AniListMedia): MediaPart {
   const isAnime = media.type === 'ANIME'
   const external_id = `${isAnime ? 'anime' : 'manga'}:${media.id}`
+  const meta = metaFromMedia(media)
   return {
     key: `anilist:${external_id}`,
     source: 'anilist',
@@ -100,7 +102,8 @@ function fromMedia(media: AniListMedia): MediaPart {
     poster_url: media.coverImage?.large || null,
     year: media.startDate?.year || null,
     total: (isAnime ? media.episodes : media.chapters) || null,
-    adult: !!media.isAdult || (media.genres ?? []).some((g) => ADULT_GENRES.includes(g)),
+    adult: meta.a,
+    tags: meta.t ?? [],
     sameSex: (media.tags ?? []).some((t) => SAME_SEX_TAGS.includes(t.name)),
   }
 }
@@ -255,6 +258,7 @@ export async function importMalFiles(files: File[], onProgress?: (done: number, 
           total: r.total,
           adult: false,
           sameSex: false,
+          tags: [],
         }
     if (seen.has(base.key)) continue
     seen.set(base.key, {
@@ -340,6 +344,7 @@ export async function searchPastedTitles(
           notes: null,
           adult: opts.markMissingAdult,
           sameSex: false,
+          tags: [],
           query,
         })
       }

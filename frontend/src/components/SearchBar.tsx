@@ -45,11 +45,17 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
 
   const debouncedQuery = useDebounce(query, 400)
   const { data: mediaItems = [] } = useMediaItems()
-  const { data: searchData, isLoading, isFetching, error, refetch } = useGlobalSearch(
+  const { data: rawSearchData, isLoading, isFetching, error, refetch } = useGlobalSearch(
     debouncedQuery,
-    selectedType,
+    selectedType === 'manhwa' ? 'manga' : selectedType,
     showDropdown || showFullModal
   )
+  const searchData = rawSearchData && {
+    ...rawSearchData,
+    results: rawSearchData.results.filter((r) =>
+      selectedType === 'manhwa' ? r.media_type === 'manhwa' : r.media_type !== 'movie' && r.media_type !== 'tv'
+    ),
+  }
 
   // Build set of items on shelf (source:external_id)
   const shelfItems = new Set(
@@ -167,7 +173,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
 
               {/* Type tabs */}
               <div className="px-3 py-2 flex gap-1 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-                {(['all', 'anime', 'manga', 'movie', 'tv'] as const).map((t) => (
+                {(['all', 'anime', 'manga', 'manhwa'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setSelectedType(t)}

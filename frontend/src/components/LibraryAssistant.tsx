@@ -7,8 +7,7 @@ import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 import { MediaItem, MediaType, STATUS_LABELS } from '../types/media'
 
 const TYPE_WORDS: Record<string, MediaType> = {
-  anime: 'anime', manga: 'manga', manhwa: 'manhwa', webtoon: 'manhwa',
-  movie: 'movie', movies: 'movie', film: 'movie', tv: 'tv', show: 'tv', series: 'tv',
+  anime: 'anime', manga: 'manga', manhwa: 'manhwa', webtoon: 'manhwa', pornhwa: 'manhwa',
 }
 
 const pickRandom = <T,>(arr: T[], n: number) => [...arr].sort(() => Math.random() - 0.5).slice(0, n)

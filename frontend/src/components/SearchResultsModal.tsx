@@ -78,7 +78,7 @@ export function SearchResultsModal({
 
         {/* Type tabs */}
         <div className="px-4 pt-3 pb-2 flex gap-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-          {(['all', 'anime', 'manga', 'movie', 'tv'] as const).map((t) => (
+          {(['all', 'anime', 'manga', 'manhwa'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setSelectedType(t)}

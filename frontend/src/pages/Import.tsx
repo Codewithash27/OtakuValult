@@ -4,7 +4,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../hooks/useSession'
 import { useMediaItems } from '../hooks/useMediaItems'
-import { cacheAdultFlags, setAdultOverrides, useContentMode } from '../hooks/useAdultFilter'
+import { setAdultOverrides, useContentMode } from '../hooks/useAdultFilter'
+import { MediaMeta, primeMeta } from '../lib/anilistMeta'
 import { useToast } from '../components/Toast'
 import { PosterImage } from '../components/PosterImage'
 import { StatusBadge } from '../components/StatusBadge'
@@ -153,12 +154,12 @@ export default function Import() {
     let updated = 0
     const linked = chosen.filter((r) => r.source !== 'manual')
     const manual = chosen.filter((r) => r.source === 'manual')
-    const flags: Record<string, boolean> = {}
+    const meta: Record<string, MediaMeta> = {}
     for (const r of linked) {
       const id = anilistId(r)
-      if (id !== null) flags[String(id)] = r.adult
+      if (id !== null) meta[String(id)] = { a: r.adult, t: r.tags }
     }
-    cacheAdultFlags(flags)
+    primeMeta(meta)
     try {
       for (let i = 0; i < linked.length; i += BATCH) {
         const batch = linked.slice(i, i + BATCH)

@@ -67,7 +67,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/signup" element={<Signup />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
-                  <Route path="/" element={<Library />} />
+                  <Route path="/" element={<Library key="all" />} />
+                  <Route path="/anime" element={<Library key="anime" fixedType="anime" />} />
+                  <Route path="/manga" element={<Library key="manga" fixedType="manga" />} />
+                  <Route path="/manhwa" element={<Library key="manhwa" fixedType="manhwa" />} />
                   <Route path="/import" element={<Import />} />
                 </Route>
               </Route>

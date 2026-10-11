@@ -169,6 +169,7 @@ export function PanelUploadDialog({
             tagSuggestions={tagSuggestions}
             initialQuery={presetItem?.title ?? ''}
             initialMediaId={presetItem ? anilistId(presetItem) : null}
+            initialShelfItemId={presetItemId}
             onBusyChange={setFinding}
             onDone={onClose}
           />

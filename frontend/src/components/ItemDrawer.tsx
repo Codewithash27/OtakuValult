@@ -258,6 +258,22 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
             </div>
           )}
 
+          {(item.media_type === 'manhwa' || item.media_type === 'manga') && (
+            <a
+              href={`/gallery?title=${item.id}&find=1`}
+              onClick={() => {
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev)
+                  next.delete('item')
+                  return next
+                })
+              }}
+              className="block w-full rounded-2xl py-2.5 px-4 text-center text-sm font-semibold border border-rose-500/25 text-rose-600 dark:text-rose-300 hover:bg-rose-500/10 transition-colors"
+            >
+              🔞 Find &amp; save panel images in Gallery
+            </a>
+          )}
+
           <WatchLinks item={item} />
 
           <div className="grid grid-cols-2 gap-3">

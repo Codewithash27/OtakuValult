@@ -1,4 +1,4 @@
-import { MediaType } from '../types/media'
+import { MediaItem, MediaType, anilistId } from '../types/media'
 import { PanelKind } from '../types/panel'
 import { metaFromMedia } from './anilistMeta'
 import { apiFetch, getApiBase } from './api'
@@ -21,6 +21,8 @@ export interface FoundMedia {
   adult: boolean
   sameSex: boolean
   tags: string[]
+  /** Shelf row when this search isn't tied to an AniList id (manual / import-only titles). */
+  shelfItemId?: string
 }
 
 export interface FoundArtist {
@@ -32,7 +34,15 @@ export interface FoundArtist {
   works: FoundMedia[]
 }
 
-export type ImageGroup = 'Cover & banner' | 'Characters' | 'Volume covers' | 'Kitsu art' | 'Wallpapers' | 'Gelbooru'
+export type ImageGroup =
+  | 'Cover & banner'
+  | 'Characters'
+  | 'Volume covers'
+  | 'Kitsu art'
+  | 'Wallpapers'
+  | 'Gelbooru'
+  | 'Gelbooru tags'
+  | 'Web images'
 
 export interface FoundImage {
   /** Original image address; stored on the saved panel to spot duplicates. */
@@ -107,6 +117,188 @@ export async function searchTitles(query: string, allowAdult: boolean): Promise<
 export async function getMedia(id: number): Promise<FoundMedia | null> {
   const data = await anilist<{ Media: RawMedia | null }>(`query ($id: Int) { Media(id: $id) { ${MEDIA_FIELDS} } }`, { id })
   return data.Media ? toFound(data.Media) : null
+}
+
+/** Open image search for a title on your shelf (with or without AniList). */
+export async function foundMediaFromShelfItem(item: MediaItem, isAdult: boolean): Promise<FoundMedia> {
+  const id = anilistId(item)
+  if (id !== null) {
+    const m = await getMedia(id)
+    if (m) return { ...m, shelfItemId: item.id }
+  }
+  return {
+    id: 0,
+    shelfItemId: item.id,
+    type: item.media_type === 'anime' ? 'ANIME' : 'MANGA',
+    mediaType: item.media_type,
+    title: item.title,
+    titles: [item.title],
+    cover: item.poster_url,
+    coverXl: item.poster_url,
+    banner: null,
+    year: item.year,
+    format: null,
+    total: item.total,
+    adult: isAdult,
+    sameSex: false,
+    tags: [],
+  }
+}
+
+export type ImageSearchPresetId = 'title' | 'explicit' | 'panels' | 'cover' | `theme:${string}`
+
+const MEDIA_WORD: Record<MediaType, string> = {
+  manhwa: 'manhwa',
+  manga: 'manga',
+  anime: 'anime',
+  movie: '',
+  tv: '',
+}
+
+/** Preset chips shown under a selected title (AniList themes + common 18+ searches). */
+export function imageSearchPresets(media: FoundMedia): { id: ImageSearchPresetId; label: string }[] {
+  const base: { id: ImageSearchPresetId; label: string }[] = [
+    { id: 'title', label: 'This title' },
+    { id: 'explicit', label: 'Explicit / NSFW' },
+    { id: 'panels', label: 'Panels / chapters' },
+    { id: 'cover', label: 'Cover art' },
+  ]
+  const themes = (media.tags ?? []).slice(0, 10).map((t) => ({
+    id: `theme:${t}` as ImageSearchPresetId,
+    label: t,
+  }))
+  return [...base, ...themes]
+}
+
+export function themeTagFromPreset(preset: ImageSearchPresetId): string | null {
+  if (!preset.startsWith('theme:')) return null
+  return preset.slice(6).replace(/\s+/g, '_').toLowerCase()
+}
+
+export function buildWebSearchQuery(media: FoundMedia, preset: ImageSearchPresetId): string {
+  const kind = MEDIA_WORD[media.mediaType]
+  const name = media.title.trim()
+  const adultManhwa = media.adult && media.mediaType === 'manhwa'
+
+  switch (preset) {
+    case 'explicit':
+      return adultManhwa ? `${name} adult manhwa` : `${name} ${kind} explicit nsfw`.trim()
+    case 'panels':
+      return `${name} ${kind} chapter panel read`.trim()
+    case 'cover':
+      return `${name} ${kind} cover`.trim()
+    case 'title':
+      return adultManhwa ? `${name} adult manhwa` : `${name} ${kind}`.trim()
+    default: {
+      const theme = preset.slice(6)
+      return `${name} ${theme} ${kind}`.trim()
+    }
+  }
+}
+
+/** @deprecated use buildWebSearchQuery */
+export function webSearchQueryForMedia(media: FoundMedia): string {
+  return buildWebSearchQuery(media, 'title')
+}
+
+function titleTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2)
+}
+
+const STOP = new Set(['manhwa', 'manga', 'anime', 'chapter', 'volume', 'official', 'read', 'online', 'adult', 'nsfw'])
+
+function webImageHaystack(img: FoundImage): string {
+  let fromUrl = ''
+  const cap = img.caption ?? ''
+  try {
+    const u = new URL(cap)
+    fromUrl = ` ${u.hostname} ${u.pathname.replace(/\//g, ' ')}`
+  } catch {
+    fromUrl = cap ? ` ${cap}` : ''
+  }
+  return `${img.label}${fromUrl} ${img.sourceUrl}`.toLowerCase()
+}
+
+function conflictingSeriesInHay(hay: string, titleTokens: string[]): boolean {
+  const slug = titleTokens.join(' ')
+  const rules: { need: string[]; reject: RegExp }[] = [
+    {
+      need: ['wife', 'exchange'],
+      reject: /\b(change[\s_-]*wife|wife[\s_-]*(after|aft\b)|story identification|manhwa like)\b/i,
+    },
+    {
+      need: ['change', 'wife'],
+      reject: /\bwife[\s_-]*exchange\b/i,
+    },
+  ]
+  for (const { need, reject } of rules) {
+    if (need.every((w) => slug.includes(w)) && reject.test(hay)) return true
+  }
+  return /\b(story identification|similar to|recommendations?\s+like)\b/i.test(hay)
+}
+
+function requiredTitleTokens(tokenSets: string[][]): string[] {
+  let best: string[] = []
+  for (const tokens of tokenSets) {
+    const req = tokens.filter((t) => t.length >= 3 && !STOP.has(t))
+    if (req.length > best.length) best = req
+  }
+  return best
+}
+
+/** Drop wrong series; strict mode requires every important word from the title (e.g. wife + exchange). */
+export function filterWebImagesForMedia(images: FoundImage[], media: FoundMedia, strict: boolean): FoundImage[] {
+  const tokenSets = [...new Set([media.title, ...media.titles])]
+    .map(titleTokens)
+    .map((t) => t.filter((w) => !STOP.has(w)))
+    .filter((t) => t.length > 0)
+  if (!tokenSets.length) return images
+
+  const required = requiredTitleTokens(tokenSets)
+  const blocklist = /\b(best|top \d|reddit|pinterest|recommend|similar to|manhwa like|other manhwa)\b/i
+
+  const scored = images.map((img) => {
+    const hay = webImageHaystack(img)
+    if (blocklist.test(hay)) return { img, ok: false, score: 0 }
+    if (conflictingSeriesInHay(hay, required)) return { img, ok: false, score: 0 }
+
+    let best = 0
+    const requiredHits = required.filter((t) => hay.includes(t))
+    const allRequiredHit = required.length === 0 || requiredHits.length === required.length
+    for (const tokens of tokenSets) {
+      const req = tokens.filter((t) => t.length >= 3 && !STOP.has(t))
+      const hits = req.filter((t) => hay.includes(t))
+      const score = hits.length * 12 + hits.reduce((n, t) => n + Math.max(0, t.length - 3), 0)
+      best = Math.max(best, score)
+    }
+
+    const phrase = media.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    if (phrase.length > 6 && hay.includes(phrase)) best += 25
+
+    const ok = strict
+      ? allRequiredHit && best >= 8
+      : best >= 8 || (best >= 4 && tokensMatchLoose(hay, tokenSets))
+    return { img, ok, score: best }
+  })
+
+  const kept = scored.filter((s) => s.ok && s.score > 0)
+  kept.sort((a, b) => b.score - a.score)
+  if (kept.length >= 1) return kept.map((s) => s.img)
+  if (strict) return []
+  const soft = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score)
+  return soft.length ? soft.map((s) => s.img) : images
+}
+
+function tokensMatchLoose(hay: string, tokenSets: string[][]): boolean {
+  return tokenSets.some((tokens) => {
+    const strong = tokens.filter((t) => t.length >= 5)
+    if (strong.some((t) => hay.includes(t))) return true
+    const hits = tokens.filter((t) => t.length >= 4 && hay.includes(t))
+    return hits.length >= 2
+  })
 }
 
 interface RawStaff {
@@ -355,6 +547,31 @@ export const GELBOORU_PAGE_SIZE = 40
 export class GelbooruAuthError extends Error {}
 
 /** Posts for a title's Gelbooru series tag; previews and downloads go through the backend. */
+function mapGelbooruPosts(data: GelbooruResponse, group: 'Gelbooru' | 'Gelbooru tags'): WallpaperPage & { tag: string | null } {
+  return {
+    tag: data.tag,
+    page: data.page,
+    lastPage: Math.ceil(data.total / GELBOORU_PAGE_SIZE),
+    total: data.total,
+    images: data.posts.map((p) => {
+      const adult = p.rating === 'questionable' || p.rating === 'explicit'
+      return {
+        sourceUrl: p.file_url,
+        thumb: proxied(p.thumb_url),
+        download: proxied(p.file_url),
+        group,
+        label: `#${p.id} · ${p.rating}`,
+        kind: 'panel' as const,
+        tags: ['panel', 'gelbooru', p.rating],
+        caption: p.source || `https://gelbooru.com/index.php?page=post&s=view&id=${p.id}`,
+        landscape: !!(p.width && p.height && p.width > p.height),
+        adult,
+        fallbackDownload: p.sample_url ? proxied(p.sample_url) : undefined,
+      }
+    }),
+  }
+}
+
 export async function gelbooruImages(
   media: FoundMedia,
   creds: GelbooruCredentials,
@@ -370,27 +587,93 @@ export async function gelbooruImages(
   if (res.status === 401) throw new GelbooruAuthError('Gelbooru rejected your user ID or API key')
   if (!res.ok) throw new Error(`Gelbooru search failed (${res.status})`)
   const data = (await res.json()) as GelbooruResponse
+  return mapGelbooruPosts(data, 'Gelbooru')
+}
+
+/** Tag search (change_wife manhwa …) — better for adult manhwa without a Gelbooru series tag. */
+export async function gelbooruTagImages(
+  media: FoundMedia,
+  creds: GelbooruCredentials,
+  rating: GelbooruRating | null,
+  page: number,
+  extraTag?: string | null,
+): Promise<WallpaperPage & { tag: string | null }> {
+  const params = new URLSearchParams({ page: String(page), media_type: media.mediaType })
+  if (rating) params.set('rating', rating)
+  if (extraTag) params.set('extra_tag', extraTag)
+  media.titles.slice(0, 3).forEach((t) => params.append('title', t))
+  const res = await fetch(`${getApiBase()}/api/images/gelbooru/tags?${params}`, {
+    headers: { 'X-Gelbooru-User': creds.userId, 'X-Gelbooru-Key': creds.apiKey },
+  })
+  if (res.status === 401) throw new GelbooruAuthError('Gelbooru rejected your user ID or API key')
+  if (!res.ok) throw new Error(`Gelbooru tag search failed (${res.status})`)
+  const data = (await res.json()) as GelbooruResponse
+  return mapGelbooruPosts(data, 'Gelbooru tags')
+}
+
+export type WebSearchProviders = {
+  free: boolean
+  ddgs: boolean
+  searxng: boolean
+  active?: string
+}
+
+export async function webSearchProviders(): Promise<WebSearchProviders | null> {
+  try {
+    const data = await apiFetch<{ providers?: WebSearchProviders }>('/api/images/web-search/config')
+    return data.providers ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function webSearchConfigured(): Promise<boolean> {
+  try {
+    const data = await apiFetch<{ configured: boolean }>('/api/images/web-search/config')
+    return !!data.configured
+  } catch {
+    return false
+  }
+}
+
+export async function webSearchImages(
+  query: string,
+  safe: boolean,
+  start: number,
+): Promise<WallpaperPage & { query: string; provider?: string }> {
+  const params = new URLSearchParams({ q: query, safe: String(safe), start: String(start) })
+  const data = await apiFetch<{
+    configured: boolean
+    provider?: string
+    query: string
+    page: number
+    total: number
+    last_page?: number
+    items: { id: string; title: string; page_url: string | null; file_url: string; thumb_url: string; width: number | null; height: number | null }[]
+  }>(`/api/images/web-search?${params}`)
+  if (!data.configured) {
+    return { query, page: 1, lastPage: 1, total: 0, images: [] }
+  }
+  const lastPage = data.last_page ?? Math.max(1, Math.ceil(data.total / 10))
   return {
-    tag: data.tag,
+    query: data.query,
+    provider: data.provider,
     page: data.page,
-    lastPage: Math.ceil(data.total / GELBOORU_PAGE_SIZE),
+    lastPage,
     total: data.total,
-    images: data.posts.map((p) => {
-      const adult = p.rating === 'questionable' || p.rating === 'explicit'
-      return {
-        sourceUrl: p.file_url,
-        thumb: proxied(p.thumb_url),
-        download: proxied(p.file_url),
-        group: 'Gelbooru' as const,
-        label: `#${p.id} · ${p.rating}`,
-        kind: 'art' as const,
-        tags: ['gelbooru', p.rating],
-        caption: p.source || `https://gelbooru.com/index.php?page=post&s=view&id=${p.id}`,
-        landscape: !!(p.width && p.height && p.width > p.height),
-        adult,
-        fallbackDownload: p.sample_url ? proxied(p.sample_url) : undefined,
-      }
-    }),
+    images: data.items.map((item) => ({
+      sourceUrl: item.file_url,
+      thumb: item.thumb_url,
+      download: proxied(item.file_url),
+      group: 'Web images' as const,
+      label: item.title.slice(0, 80) || 'Web image',
+      kind: 'panel' as const,
+      tags: ['panel', 'web'],
+      caption: item.page_url,
+      landscape: !!(item.width && item.height && item.width > item.height),
+      adult: !safe,
+      fallbackDownload: proxied(item.thumb_url),
+    })),
   }
 }
 

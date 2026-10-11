@@ -14,7 +14,9 @@ import {
   aniListImages,
   downloadImage,
   gelbooruImages,
+  gelbooruTagImages,
   getMedia,
+  foundMediaFromShelfItem,
   parseGelbooruCredentials,
   readGelbooruCredentials,
   saveGelbooruCredentials,
@@ -23,7 +25,16 @@ import {
   searchArtists,
   searchTitles,
   wallhavenImages,
+  webSearchConfigured,
+  webSearchProviders,
+  webSearchImages,
+  buildWebSearchQuery,
+  imageSearchPresets,
+  filterWebImagesForMedia,
+  themeTagFromPreset,
+  type ImageSearchPresetId,
 } from '../lib/imageFinder'
+import { getApiBase } from '../lib/api'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { useGalleryBlur } from '../hooks/usePanelAccess'
 import { usePanels, useUploadPanels } from '../hooks/usePanels'
@@ -59,6 +70,8 @@ interface Props {
   initialQuery?: string
   /** Opens this AniList title's images straight away (a shelf title's drawer). */
   initialMediaId?: number | null
+  /** Opens image search for this shelf title (works for manual adult manhwa too). */
+  initialShelfItemId?: string | null
   onBusyChange: (busy: boolean) => void
   onDone: () => void
 }
@@ -72,7 +85,16 @@ function useDebounced<T>(value: T, ms: number) {
   return debounced
 }
 
-export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = '', initialMediaId, onBusyChange, onDone }: Props) {
+export function FindImages({
+  items,
+  isAdultItem,
+  tagSuggestions,
+  initialQuery = '',
+  initialMediaId,
+  initialShelfItemId,
+  onBusyChange,
+  onDone,
+}: Props) {
   const { showToast } = useToast()
   const queryClient = useQueryClient()
   const [contentMode] = useContentMode()
@@ -91,6 +113,14 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
   const [adult, setAdult] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [imageSearchPreset, setImageSearchPreset] = useState<ImageSearchPresetId>('explicit')
+  const [strictTitleFilter, setStrictTitleFilter] = useState(true)
+
+  useEffect(() => {
+    if (!media || !allowAdult) return
+    setImageSearchPreset(media.adult ? 'explicit' : 'title')
+    setStrictTitleFilter(true)
+  }, [media?.id, media?.adult, allowAdult])
 
   const titleSearch = useQuery({
     queryKey: ['find-titles', q, allowAdult],
@@ -107,7 +137,7 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
   const alImages = useQuery({
     queryKey: ['find-images-anilist', media?.id],
     queryFn: () => aniListImages(media!),
-    enabled: !!media,
+    enabled: !!media && media.id > 0,
     staleTime: 30 * 60 * 1000,
   })
   const mdImages = useQuery({
@@ -141,18 +171,69 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
     queryFn: ({ pageParam }) => gelbooruImages(media!, gbCreds!, gbRating, pageParam),
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page < last.lastPage ? last.page + 1 : undefined),
-    enabled: !!media && !!gbCreds,
+    enabled: !!media && media.id > 0 && !!gbCreds,
     staleTime: 30 * 60 * 1000,
     retry: (count, err) => !(err instanceof GelbooruAuthError) && count < 1,
   })
+  const gelbooruThemeTag = media ? themeTagFromPreset(imageSearchPreset) : null
+  const gelbooruTags = useInfiniteQuery({
+    queryKey: ['find-images-gelbooru-tags', media?.id, media?.title, gbRating, gbCreds?.userId, imageSearchPreset],
+    queryFn: ({ pageParam }) => gelbooruTagImages(media!, gbCreds!, gbRating, pageParam, gelbooruThemeTag),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.lastPage ? last.page + 1 : undefined),
+    enabled: !!media && !!gbCreds && allowAdult,
+    staleTime: 30 * 60 * 1000,
+    retry: (count, err) => !(err instanceof GelbooruAuthError) && count < 1,
+  })
+  const webReady = useQuery({
+    queryKey: ['web-search-configured'],
+    queryFn: webSearchConfigured,
+    staleTime: 60 * 60 * 1000,
+  })
+  const webProviders = useQuery({
+    queryKey: ['web-search-providers'],
+    queryFn: webSearchProviders,
+    staleTime: 60 * 60 * 1000,
+  })
+  const webQuery = media ? buildWebSearchQuery(media, imageSearchPreset) : ''
+  const web = useInfiniteQuery({
+    queryKey: ['find-images-web', webQuery, allowAdult],
+    queryFn: ({ pageParam }) => webSearchImages(webQuery, !allowAdult, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (last, _pages, lastParam) =>
+      last.page < last.lastPage ? lastParam + 10 : undefined,
+    enabled: !!media && !!webReady.data && allowAdult,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  })
 
-  const shelfItem = useMemo(() => (media ? items.find((i) => anilistId(i) === media.id) : undefined), [items, media])
+  const shelfItem = useMemo(() => {
+    if (!media) return undefined
+    if (media.shelfItemId) return items.find((i) => i.id === media.shelfItemId)
+    return media.id > 0 ? items.find((i) => anilistId(i) === media.id) : undefined
+  }, [items, media])
   const saved = useMemo(() => new Set(panels.map((p) => p.source_url).filter(Boolean) as string[]), [panels])
   const wallpaperImages = useMemo(() => wallpapers.data?.pages.flatMap((p) => p.images) ?? [], [wallpapers.data])
   const gelbooruList = useMemo(() => gelbooru.data?.pages.flatMap((p) => p.images) ?? [], [gelbooru.data])
+  const gelbooruTagList = useMemo(() => gelbooruTags.data?.pages.flatMap((p) => p.images) ?? [], [gelbooruTags.data])
+  const webProviderLabel = web.data?.pages[0]?.provider
+  const webListRaw = useMemo(() => web.data?.pages.flatMap((p) => p.images) ?? [], [web.data])
+  const webList = useMemo(
+    () => (media ? filterWebImagesForMedia(webListRaw, media, strictTitleFilter) : webListRaw),
+    [webListRaw, media, strictTitleFilter],
+  )
   const images = useMemo(
-    () => [...(alImages.data ?? []), ...(mdImages.data ?? []), ...(kitsu.data ?? []), ...wallpaperImages, ...gelbooruList],
-    [alImages.data, mdImages.data, kitsu.data, wallpaperImages, gelbooruList],
+    () =>
+      [
+        ...(alImages.data ?? []),
+        ...(mdImages.data ?? []),
+        ...(kitsu.data ?? []),
+        ...wallpaperImages,
+        ...gelbooruList,
+        ...gelbooruTagList,
+        ...webList,
+      ],
+    [alImages.data, mdImages.data, kitsu.data, wallpaperImages, gelbooruList, gelbooruTagList, webList],
   )
 
   useEffect(() => onBusyChange(upload.isPending), [upload.isPending]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -168,14 +249,35 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
     }
   }, [initialMediaId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!initialShelfItemId) return
+    const item = items.find((i) => i.id === initialShelfItemId)
+    if (!item) return
+    let cancelled = false
+    foundMediaFromShelfItem(item, isAdultItem(item))
+      .then((m) => !cancelled && openMedia(m))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [initialShelfItemId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const openMedia = (m: FoundMedia) => {
     setMedia(m)
     setSelected(new Set())
     setAddToShelf(true)
-    const onShelf = items.find((i) => anilistId(i) === m.id)
-    setAdult(m.adult || (!!onShelf && isAdultItem(onShelf)))
-    setTags([])
+    const onShelf = m.shelfItemId ? items.find((i) => i.id === m.shelfItemId) : items.find((i) => anilistId(i) === m.id)
+    const isAdult = m.adult || (!!onShelf && isAdultItem(onShelf))
+    setAdult(isAdult)
+    setTags(isAdult ? ['panel'] : [])
+    if (allowAdult && isAdult) setGbRating('explicit')
+    setImageSearchPreset('title')
+    setStrictTitleFilter(false)
     setProgress(null)
+  }
+
+  const openShelfItem = (item: MediaItem) => {
+    void foundMediaFromShelfItem(item, isAdultItem(item)).then(openMedia)
   }
 
   const toggle = (url: string) =>
@@ -197,6 +299,7 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
   }
 
   async function ensureShelfItem(m: FoundMedia): Promise<string | null> {
+    if (m.shelfItemId) return m.shelfItemId
     if (shelfItem) return shelfItem.id
     if (!addToShelf) return null
     const { data: auth } = await supabase.auth.getUser()
@@ -280,7 +383,7 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
     const blurred = blurAdult && adult
     const wakeNote = 'the server can take up to a minute to wake up'
     type Paged = { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown; total: number }
-    const paged = (q: typeof wallpapers | typeof gelbooru): Paged => ({
+    const paged = (q: typeof wallpapers | typeof gelbooru | typeof gelbooruTags | typeof web): Paged => ({
       hasNextPage: q.hasNextPage,
       isFetchingNextPage: q.isFetchingNextPage,
       fetchNextPage: q.fetchNextPage,
@@ -321,14 +424,14 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
       },
       {
         group: 'Gelbooru',
-        title: 'Gelbooru',
+        title: 'Gelbooru · series tag',
         query: gelbooru,
         loading: `Searching Gelbooru… ${wakeNote}.`,
         empty: gelbooru.data?.pages[0]?.tag
           ? `Nothing on Gelbooru for this rating (tag: ${gelbooru.data.pages[0].tag}).`
-          : 'Gelbooru has no tag for this title.',
+          : 'Gelbooru has no series tag for this title.',
         grid: 'grid-cols-3 sm:grid-cols-4',
-        show: !!gbCreds,
+        show: !!gbCreds && media.id > 0,
         more: paged(gelbooru),
         extra: allowAdult ? (
           <div className="flex flex-wrap gap-1.5 mb-2">
@@ -344,6 +447,76 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
           </div>
         ) : (
           <p className="text-[11px] text-slate-500 mb-2">Clean mode: general-rated posts only.</p>
+        ),
+      },
+      {
+        group: 'Gelbooru tags',
+        title: 'Gelbooru · title tags (18+ manhwa)',
+        query: gelbooruTags,
+        loading: `Searching Gelbooru by title tags… ${wakeNote}.`,
+        empty: gelbooruTags.data?.pages[0]?.tag
+          ? `No posts for tags “${gelbooruTags.data.pages[0].tag}” at this rating.`
+          : 'Try Explicit or Questionable above.',
+        grid: 'grid-cols-3 sm:grid-cols-4',
+        show: !!gbCreds && allowAdult,
+        more: paged(gelbooruTags),
+        extra: allowAdult ? (
+          <p className="text-[11px] text-slate-500 mb-2">
+            Matches tags like <code className="text-violet-500">{media.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}</code> — fan art &amp; panels when they exist on Gelbooru.
+          </p>
+        ) : null,
+      },
+      {
+        group: 'Web images',
+        title: webProviderLabel
+          ? `Web images · ${
+              webProviderLabel === 'searxng'
+                ? 'SearXNG'
+                : webProviderLabel === 'free'
+                  ? 'free search'
+                  : webProviderLabel
+            }`
+          : 'Web images · free search',
+        query: web,
+        loading: `Searching the web for “${webQuery}”… ${wakeNote}.`,
+        empty: `No images returned for “${webQuery}”. Try a shorter name or Gelbooru tags below.`,
+        grid: 'grid-cols-3 sm:grid-cols-4',
+        show: allowAdult,
+        more: paged(web),
+        extra: (
+          <div className="space-y-2 mb-2">
+            {web.isError && (
+              <p className="text-[11px] text-rose-500">
+                Web search failed ({web.error instanceof Error ? web.error.message : 'error'}). Is the backend running on port 8000?
+              </p>
+            )}
+            {strictTitleFilter && webListRaw.length > webList.length && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-300">
+                Hid {webListRaw.length - webList.length} results that didn&apos;t match “{media.title}”. Turn off strict filter to see all.
+              </p>
+            )}
+            {!web.isLoading && !web.isError && webListRaw.length > 0 && webList.length === 0 && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-300">
+                Strict filter removed all {webListRaw.length} results — turn off <b>Strict: this title only</b> above or try another focus chip.
+              </p>
+            )}
+            <p className="text-[11px] text-slate-500">
+              Query: <code className="text-violet-500 break-all">{webQuery}</code>
+            </p>
+            {webProviders.data && (
+              <p className="text-[11px] text-slate-500">
+                Engine:{' '}
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {webProviderLabel === 'searxng'
+                    ? 'SearXNG (free, no API key)'
+                    : 'DDGS meta-search (free, no API key)'}
+                </span>
+              </p>
+            )}
+            <p className="text-[11px] text-slate-500">
+              No paid search API keys on the server — results come from free meta-search, then SearXNG if needed.
+            </p>
+          </div>
         ),
       },
     ]
@@ -370,6 +543,39 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
               </p>
             </div>
           </div>
+
+          {allowAdult && (
+            <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className={label + ' !mb-0'}>Search focus · {media.title}</p>
+                <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={strictTitleFilter}
+                    onChange={(e) => setStrictTitleFilter(e.target.checked)}
+                    className="accent-violet-500 w-3.5 h-3.5"
+                  />
+                  Strict: this title only
+                </label>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Use <b>Explicit / NSFW</b> for panel art like Google Images. <b>Strict</b> keeps only results that match every word in “
+                {media.title}”.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {imageSearchPresets(media).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setImageSearchPreset(p.id)}
+                    className={`chip !px-2.5 !py-0.5 !text-[11px] ${imageSearchPreset === p.id ? 'chip-active' : ''}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {alImages.isLoading && <p className="text-sm text-slate-500 animate-pulse">Loading images from AniList…</p>}
           {alImages.isError && <p className="text-sm text-rose-500">Couldn't load AniList images. Try again in a minute.</p>}
@@ -536,9 +742,33 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
         placeholder={mode === 'title' ? 'Manhwa, manga or anime name…' : 'Artist or author name, e.g. So-Ryeong Gi'}
         className="input-premium w-full"
       />
+      {allowAdult && (
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 space-y-2 -mt-1">
+          <p className="text-xs font-semibold text-rose-600 dark:text-rose-300">18+ image finder (Creamy mode)</p>
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
+            Pick a title below or search by name, then use <b>Gelbooru title tags</b> or <b>Web images</b> to browse explicit panels like a Google image search and save them to your gallery.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {items
+              .filter((i) => i.media_type === 'manhwa' || isAdultItem(i))
+              .slice(0, 10)
+              .map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => openShelfItem(i)}
+                  className="chip !px-2.5 !py-0.5 !text-[11px] max-w-[12rem] truncate"
+                  title={i.title}
+                >
+                  {i.title}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
-        Covers, banners and character art from AniList, volume covers from MangaDex, posters from Kitsu and wallpapers from
-        Wallhaven.
+        Covers from AniList &amp; MangaDex, wallpapers from Wallhaven, plus Gelbooru and web search in Creamy mode.
       </p>
 
       {q.length >= 2 && search.isLoading && <p className="text-sm text-slate-500 animate-pulse">Searching AniList…</p>}
@@ -690,6 +920,7 @@ function ImageTile({
   onToggle: () => void
 }) {
   const [failed, setFailed] = useState(false)
+  const [src, setSrc] = useState(image.thumb)
   if (failed) return null
   return (
     <button
@@ -702,10 +933,15 @@ function ImageTile({
       } ${saved ? 'opacity-50 cursor-default' : ''}`}
     >
       <img
-        src={image.thumb}
+        src={src}
         alt={image.label}
         loading="lazy"
-        onError={() => setFailed(true)}
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (image.group === 'Web images' && src === image.thumb) {
+            setSrc(`${getApiBase()}/api/images/proxy?url=${encodeURIComponent(image.sourceUrl)}`)
+          } else setFailed(true)
+        }}
         className={`w-full h-full object-cover ${blurred ? 'blur-xl scale-110' : ''}`}
       />
       <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 text-[10px] font-semibold text-white truncate bg-gradient-to-t from-black/80 to-transparent">

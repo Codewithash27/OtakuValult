@@ -44,6 +44,7 @@ export default function Gallery() {
   const tags = splitParam(params.get('tags'))
   const sort = params.get('sort') === 'old' ? 'old' : 'new'
   const openId = params.get('panel')
+  const wantFind = params.get('find') === '1'
 
   const setParam = useCallback(
     (key: string, value: string | null) =>
@@ -123,6 +124,12 @@ export default function Gallery() {
     setUploadTab(tab)
     setUploadOpen(true)
   }
+
+  useEffect(() => {
+    if (!wantFind || !titleId || uploadOpen) return
+    openUpload(undefined, 'find')
+    setParam('find', null)
+  }, [wantFind, titleId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (uploadOpen || openId) return
@@ -234,6 +241,15 @@ export default function Gallery() {
         <button onClick={() => openUpload(undefined, 'find')} className="chip !px-3 !py-1.5 !text-xs">
           🔍 Find images
         </button>
+        {contentMode === 'creamy' && titleId && selectedTitle && (
+          <button
+            onClick={() => openUpload(undefined, 'find')}
+            className="chip !px-3 !py-1.5 !text-xs border-rose-500/30 text-rose-600 dark:text-rose-300"
+            title={`Search explicit / panel images for ${selectedTitle.title}`}
+          >
+            🔞 Find for “{selectedTitle.title.length > 18 ? `${selectedTitle.title.slice(0, 16)}…` : selectedTitle.title}”
+          </button>
+        )}
         <button onClick={() => openUpload()} className="btn-glow !py-1.5 text-sm">
           ⬆ Upload
         </button>

@@ -84,6 +84,60 @@ async def _find_copyright_tag(client: httpx.AsyncClient, titles: list[str], auth
     return None
 
 
+async def search_posts_by_tag_query(
+    tag_query: str, rating: Optional[str], page: int, user_id: str, api_key: str
+) -> dict:
+    """Gelbooru search with a raw tag string (e.g. change_wife manhwa rating:explicit)."""
+    auth = {"user_id": user_id, "api_key": api_key}
+    owner = hashlib.sha256(f"{user_id}:{api_key}".encode()).hexdigest()[:16]
+    key = ("gelbooru-tag-query", owner, tag_query, rating, page)
+    cached = _post_cache.get(key)
+    if cached is not None:
+        return cached
+
+    query = f"{tag_query.strip()} {QUERY_EXCLUSIONS}" + (f" rating:{rating}" if rating else "")
+    async with httpx.AsyncClient(timeout=12.0, headers=HEADERS) as client:
+        body = await _get(client, {"s": "post", "tags": query, "limit": PAGE_SIZE, "pid": page - 1, **auth})
+
+    posts = []
+    for p in body.get("post") or []:
+        file_url = p.get("file_url") or ""
+        if not IMAGE_EXT.search(file_url) or BLOCKED_TAGS.intersection((p.get("tags") or "").split()):
+            continue
+        posts.append(
+            {
+                "id": p["id"],
+                "rating": p.get("rating"),
+                "width": p.get("width"),
+                "height": p.get("height"),
+                "file_url": file_url,
+                "sample_url": p.get("sample_url") or None,
+                "thumb_url": p.get("preview_url") or p.get("sample_url") or file_url,
+                "source": p.get("source") or None,
+            }
+        )
+    result = {
+        "tag": tag_query.strip(),
+        "total": int((body.get("@attributes") or {}).get("count", 0)),
+        "page": page,
+        "posts": posts,
+    }
+    _post_cache.set(key, result)
+    return result
+
+
+def tag_query_from_titles(titles: list[str], media_hint: str | None = None) -> str:
+    """Build a Gelbooru tag query from a manhwa/manga title."""
+    parts: list[str] = []
+    for title in titles[:2]:
+        tag = _to_tag(title)
+        if len(tag) >= 3:
+            parts.append(tag)
+    if media_hint == "manhwa" and "manhwa" not in parts:
+        parts.append("manhwa")
+    return " ".join(parts) if parts else ""
+
+
 async def search_posts(titles: list[str], rating: Optional[str], page: int, user_id: str, api_key: str) -> dict:
     auth = {"user_id": user_id, "api_key": api_key}
     async with httpx.AsyncClient(timeout=12.0, headers=HEADERS) as client:

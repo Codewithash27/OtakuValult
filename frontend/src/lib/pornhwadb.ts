@@ -28,6 +28,8 @@ export type PornhwaExportImage = {
 export type PornhwaStatus = {
   configured: boolean
   path?: string
+  hint?: string
+  remoteBootstrap?: boolean
   generatedAt?: string
   seriesCount?: number
 }

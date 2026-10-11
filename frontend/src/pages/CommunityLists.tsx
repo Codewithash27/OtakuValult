@@ -83,15 +83,23 @@ function ChartHeader({ sort }: { sort: ManhwaChartSort }) {
   )
 }
 
-function ExportSetup() {
+function ExportSetup({ hint }: { hint?: string }) {
   return (
-    <div className="glass rounded-2xl p-8 max-w-lg mx-auto text-center mt-8">
+    <div className="glass rounded-2xl p-8 max-w-xl mx-auto text-center mt-8">
       <div className="text-4xl mb-3">📦</div>
-      <h2 className="font-bold text-lg">Export file required</h2>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-        Copy <code className="px-1 rounded bg-black/10 dark:bg-white/10">pornhwa-export.json</code> to{' '}
-        <code className="px-1 rounded bg-black/10 dark:bg-white/10">backend/data/</code> and restart the backend.
+      <h2 className="font-bold text-lg">Export file required on the API</h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+        Top rated uses your private <code className="px-1 rounded bg-black/10 dark:bg-white/10">pornhwa-export.json</code>{' '}
+        on <strong>Render</strong>, not in git. Local dev: copy it to{' '}
+        <code className="px-1 rounded bg-black/10 dark:bg-white/10">backend/data/</code> and restart uvicorn.
       </p>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
+        Production: run <code className="px-1 rounded bg-black/10 dark:bg-white/10">python scripts/upload_pornhwadb_export.py</code>,
+        then set <code className="px-1 rounded bg-black/10 dark:bg-white/10">PORNHWADB_STORAGE_BUCKET</code> on Render and redeploy.
+      </p>
+      {hint ? (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-4 leading-relaxed">{hint}</p>
+      ) : null}
     </div>
   )
 }
@@ -163,8 +171,16 @@ function ManhwaTopList() {
     return <p className="text-sm text-slate-500 py-12 text-center">Checking export…</p>
   }
 
+  if (status.isError) {
+    return (
+      <div className="glass rounded-2xl p-8 max-w-lg mx-auto text-center mt-8">
+        <p className="text-sm text-slate-500">Could not reach the API. Check VITE_API_URL and CORS on Render.</p>
+      </div>
+    )
+  }
+
   if (!status.data?.configured) {
-    return <ExportSetup />
+    return <ExportSetup hint={status.data?.hint} />
   }
 
   return (

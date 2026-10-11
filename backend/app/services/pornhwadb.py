@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+_bootstrap_attempted = False
+_last_bootstrap_error: str | None = None
 
 
 def _data_path() -> Path:
@@ -21,6 +29,86 @@ def _data_path() -> Path:
 
 def is_configured() -> bool:
     return _data_path().is_file()
+
+
+def _download_from_url(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with httpx.stream("GET", url, follow_redirects=True, timeout=180.0) as response:
+        response.raise_for_status()
+        with dest.open("wb") as out:
+            for chunk in response.iter_bytes():
+                out.write(chunk)
+
+
+def _download_from_supabase_storage(bucket: str, object_path: str, dest: Path) -> None:
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required for storage download")
+    from supabase import create_client
+
+    client = create_client(settings.supabase_url, settings.supabase_service_role_key)
+    data = client.storage.from_(bucket).download(object_path)
+    if not data:
+        raise RuntimeError(f"Empty download from {bucket}/{object_path}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+
+
+def ensure_export_file() -> bool:
+    """Load gitignored export on first boot (local file, URL, or Supabase Storage)."""
+    global _bootstrap_attempted, _last_bootstrap_error
+
+    path = _data_path()
+    if path.is_file():
+        return True
+    if _bootstrap_attempted:
+        return False
+    _bootstrap_attempted = True
+    _last_bootstrap_error = None
+
+    url = (settings.pornhwadb_data_url or "").strip()
+    bucket = (settings.pornhwadb_storage_bucket or "").strip()
+    object_path = (settings.pornhwadb_storage_object or "pornhwa-export.json").strip()
+
+    try:
+        if url:
+            logger.info("Downloading PornhwaDB export from PORNHWADB_DATA_URL → %s", path)
+            _download_from_url(url, path)
+        elif bucket and object_path:
+            logger.info(
+                "Downloading PornhwaDB export from Supabase %s/%s → %s",
+                bucket,
+                object_path,
+                path,
+            )
+            _download_from_supabase_storage(bucket, object_path, path)
+        else:
+            return False
+        clear_cache()
+        logger.info("PornhwaDB export ready (%s bytes)", path.stat().st_size)
+        return True
+    except Exception as exc:
+        _last_bootstrap_error = str(exc)
+        logger.exception("PornhwaDB export bootstrap failed")
+        if path.is_file():
+            path.unlink(missing_ok=True)
+        return False
+
+
+def _status_hint() -> str:
+    if _last_bootstrap_error:
+        return f"Auto-download failed: {_last_bootstrap_error}"
+    bucket = (settings.pornhwadb_storage_bucket or "").strip()
+    if bucket:
+        return (
+            "Set PORNHWADB_STORAGE_BUCKET on Render and upload the export once "
+            "(see backend/scripts/upload_pornhwadb_export.py)."
+        )
+    if (settings.pornhwadb_data_url or "").strip():
+        return "PORNHWADB_DATA_URL is set but the file is missing — check the URL and redeploy logs."
+    return (
+        "Upload pornhwa-export.json to the API server, or set PORNHWADB_STORAGE_BUCKET / "
+        "PORNHWADB_DATA_URL (file is not in git)."
+    )
 
 
 @lru_cache(maxsize=1)
@@ -199,7 +287,15 @@ def chart_page(
 def catalogue_status() -> dict[str, Any]:
     cat = _catalogue()
     if not cat:
-        return {"configured": False, "path": str(_data_path())}
+        return {
+            "configured": False,
+            "path": str(_data_path()),
+            "hint": _status_hint(),
+            "remoteBootstrap": bool(
+                (settings.pornhwadb_data_url or "").strip()
+                or (settings.pornhwadb_storage_bucket or "").strip()
+            ),
+        }
     return {
         "configured": True,
         "path": str(_data_path()),

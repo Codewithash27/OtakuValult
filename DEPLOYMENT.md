@@ -128,6 +128,7 @@ API docs: `https://otakuvault-api.onrender.com/docs`.
 
 1. **Render → otakuvault-api → Environment**:
    - `FRONTEND_ORIGIN` = `https://otaku-valult.vercel.app,http://localhost:5173`
+   - `FRONTEND_ORIGIN_REGEX` = `https://otaku-valult.*\.vercel\.app` (covers git preview URLs like `otaku-valult-git-main-….vercel.app`)
      (comma-separated, no trailing slashes)
    - Optional, to allow Vercel preview deployments too:
      `FRONTEND_ORIGIN_REGEX` = `https://otaku-valult-.*\.vercel\.app`

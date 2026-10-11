@@ -11,7 +11,8 @@ class Settings(BaseSettings):
     # Comma-separated list, e.g. "http://localhost:5173,https://otakuvault.vercel.app"
     frontend_origin: str = "http://localhost:5173"
     # Optional regex for Vercel preview URLs, e.g. "https://otaku-valult-.*\.vercel\.app"
-    frontend_origin_regex: str = r"https://otaku-valult(-[a-z0-9-]+)?\.vercel\.app"
+    # Production + git preview URLs, e.g. otaku-valult-git-main-….vercel.app
+    frontend_origin_regex: str = r"https://otaku-valult.*\.vercel\.app"
 
     model_config = SettingsConfigDict(
         env_file=".env",

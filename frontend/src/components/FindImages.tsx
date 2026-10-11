@@ -34,7 +34,7 @@ import {
   themeTagFromPreset,
   type ImageSearchPresetId,
 } from '../lib/imageFinder'
-import { getApiBase } from '../lib/api'
+import { apiFetch, getApiBase, isBackendConfigured } from '../lib/api'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { useGalleryBlur } from '../hooks/usePanelAccess'
 import { usePanels, useUploadPanels } from '../hooks/usePanels'
@@ -43,6 +43,20 @@ import { useToast } from './Toast'
 import { TagEditor } from './TagEditor'
 
 type SearchMode = 'title' | 'artist'
+
+function describeApiError(err: unknown): string {
+  if (err instanceof GelbooruAuthError) return err.message
+  if (err instanceof Error) {
+    if (err.message === 'MISSING_VITE_API_URL') {
+      return 'Backend URL is not configured for this Vercel deploy (missing VITE_API_URL).'
+    }
+    if (err.message.startsWith('NETWORK:')) {
+      const base = err.message.slice(8)
+      return `Can't reach the API at ${base} — wrong URL, CORS, or Render is waking up (wait ~60s).`
+    }
+  }
+  return "Didn't load."
+}
 
 const TYPE_LABEL: Record<string, string> = { anime: 'Anime', manga: 'Manga', manhwa: 'Manhwa' }
 const GELBOORU_RATINGS: { id: GelbooruRating | null; label: string }[] = [
@@ -185,9 +199,17 @@ export function FindImages({
     staleTime: 30 * 60 * 1000,
     retry: (count, err) => !(err instanceof GelbooruAuthError) && count < 1,
   })
+  const backendHealth = useQuery({
+    queryKey: ['api-health', getApiBase()],
+    queryFn: () => apiFetch<{ status?: string }>('/api/health'),
+    enabled: isBackendConfigured(),
+    staleTime: 30_000,
+    retry: 1,
+  })
   const webReady = useQuery({
     queryKey: ['web-search-configured'],
     queryFn: webSearchConfigured,
+    enabled: isBackendConfigured() && backendHealth.isSuccess,
     staleTime: 60 * 60 * 1000,
   })
   const webProviders = useQuery({
@@ -580,6 +602,33 @@ export function FindImages({
           {alImages.isLoading && <p className="text-sm text-slate-500 animate-pulse">Loading images from AniList…</p>}
           {alImages.isError && <p className="text-sm text-rose-500">Couldn't load AniList images. Try again in a minute.</p>}
 
+          {!isBackendConfigured() && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100 space-y-1">
+              <p className="font-semibold">Image search needs your Render API</p>
+              <p>
+                In Vercel → Project → Settings → Environment Variables, set{' '}
+                <code className="text-violet-600 dark:text-violet-300">VITE_API_URL</code> to your backend (e.g.{' '}
+                <code className="text-violet-600 dark:text-violet-300">https://otakuvault-api.onrender.com</code>), then{' '}
+                <b>Redeploy</b> (Preview + Production).
+              </p>
+            </div>
+          )}
+          {isBackendConfigured() && backendHealth.isError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-800 dark:text-rose-100 space-y-1">
+              <p className="font-semibold">Backend not responding</p>
+              <p>{describeApiError(backendHealth.error)}</p>
+              <p>
+                On Render, set <code className="text-violet-500">FRONTEND_ORIGIN_REGEX</code> to{' '}
+                <code className="text-violet-500">https://otaku-valult.*\.vercel\.app</code> and redeploy the API after
+                gallery updates (<code className="text-violet-500">pip install -r requirements.txt</code> for{' '}
+                <code className="text-violet-500">ddgs</code>).
+              </p>
+              <button type="button" onClick={() => backendHealth.refetch()} className="font-semibold underline">
+                Retry connection
+              </button>
+            </div>
+          )}
+
           {sections.map(({ group, title, query, loading, empty, grid, show, more, extra }) => {
             if (!show) return null
             const list = images.filter((i) => i.group === group)
@@ -590,7 +639,7 @@ export function FindImages({
               } else if (query.isError && group !== 'Characters' && group !== 'Cover & banner') {
                 body = (
                   <p className="text-sm text-rose-500">
-                    {query.error instanceof GelbooruAuthError ? query.error.message : "Didn't load."}{' '}
+                    {describeApiError(query.error)}{' '}
                     <button onClick={() => query.refetch()} className="font-semibold underline">
                       Try again
                     </button>

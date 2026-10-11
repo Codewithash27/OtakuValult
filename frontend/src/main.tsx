@@ -11,6 +11,8 @@ import Signup from './pages/Signup'
 import Library from './pages/Library'
 import Import from './pages/Import'
 import NotFound from './pages/NotFound'
+import { IntroSplash } from './components/IntroSplash'
+import { AuthShell } from './components/AuthLayout'
 import { initPrefsSync } from './lib/prefsSync'
 import './index.css'
 
@@ -37,7 +39,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { message: str
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
           <div className="max-w-md text-center">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              MediaShelf hit a problem
+              OtakuVault hit a problem
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{this.state.message}</p>
             <button
@@ -63,8 +65,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <ToastProvider>
             <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
+              <Route element={<AuthShell />}>
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+              </Route>
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
                   <Route path="/" element={<Library key="all" />} />
@@ -76,6 +80,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <IntroSplash />
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

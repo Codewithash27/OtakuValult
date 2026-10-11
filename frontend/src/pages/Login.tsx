@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../hooks/useSession'
-import { AuthLayout } from '../components/AuthLayout'
+import { AuthLayout, AuthLoading } from '../components/AuthLayout'
 
 export default function Login() {
   const { session, loading } = useSession()
@@ -18,14 +18,7 @@ export default function Login() {
     }
   }, [loading, session, navigate])
 
-  if (loading || session) {
-    return (
-      <div className="min-h-screen flex flex-col gap-4 items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-4 border-violet-500/20 border-t-violet-500 animate-spin" />
-        <p className="text-gradient font-display font-semibold">Opening your library...</p>
-      </div>
-    )
-  }
+  if (loading || session) return <AuthLoading />
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

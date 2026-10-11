@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../hooks/useSession'
 import { useNavigate } from 'react-router-dom'
-import { AuthLayout } from '../components/AuthLayout'
+import { AuthLayout, AuthLoading } from '../components/AuthLayout'
 
 export default function Signup() {
   const { session, loading } = useSession()
@@ -21,13 +21,7 @@ export default function Signup() {
     }
   }, [loading, session, navigate])
 
-  if (loading || session) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-600 dark:text-gray-300">Opening your library...</p>
-      </div>
-    )
-  }
+  if (loading || session) return <AuthLoading />
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()

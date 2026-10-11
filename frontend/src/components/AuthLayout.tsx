@@ -1,70 +1,54 @@
 import { ReactNode } from 'react'
+import { Outlet } from 'react-router-dom'
+import { CinematicBackdrop } from './CinematicBackdrop'
 
-const CARDS = [
-  { g: 'from-violet-600 via-fuchsia-500 to-pink-500', label: 'Anime', icon: '⛩️' },
-  { g: 'from-cyan-500 via-sky-500 to-indigo-600', label: 'Manga', icon: '📖' },
-  { g: 'from-amber-400 via-orange-500 to-rose-600', label: 'Webtoons', icon: '📱' },
-  { g: 'from-emerald-400 via-teal-500 to-cyan-600', label: 'Your shelf', icon: '📚' },
-  { g: 'from-pink-500 via-rose-500 to-violet-600', label: 'Manhwa', icon: '✨' },
-]
-
-function PosterCarousel3D() {
-  const step = 360 / CARDS.length
+/** Shared by /login and /signup so the poster wall keeps moving when switching between them. */
+export function AuthShell() {
   return (
-    <div className="relative h-[420px] w-full grid place-items-center" style={{ perspective: 1100 }}>
-      <div
-        className="relative w-40 h-60 animate-[orbit_18s_linear_infinite]"
-        style={{ transformStyle: 'preserve-3d' }}
-      >
-        {CARDS.map((c, i) => (
-          <div
-            key={c.label}
-            className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${c.g} p-4 flex flex-col justify-between border border-white/20 shadow-[0_20px_60px_-10px_rgba(124,58,237,.6)]`}
-            style={{ transform: `rotateY(${i * step}deg) translateZ(230px)`, backfaceVisibility: 'hidden' }}
-          >
-            <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,.45),transparent_55%)]" />
-            <span className="relative text-4xl drop-shadow-lg">{c.icon}</span>
-            <div className="relative">
-              <div className="h-1.5 w-16 rounded-full bg-white/50 mb-2" />
-              <div className="font-display font-bold text-white text-xl drop-shadow">{c.label}</div>
-            </div>
-          </div>
-        ))}
+    <div className="dark relative min-h-screen grid lg:grid-cols-2 items-center gap-10 overflow-hidden p-4 lg:p-10 text-slate-100">
+      <CinematicBackdrop />
+
+      <div className="hidden lg:flex flex-col items-start self-end pb-16 animate-fade-up">
+        <h2 className="text-6xl font-bold text-white leading-[1.05] drop-shadow-[0_6px_40px_rgba(168,85,247,.5)]">
+          Your
+          <br />
+          <span className="text-gradient">anime vault</span>
+        </h2>
+        <p className="mt-4 text-slate-200/90 max-w-sm drop-shadow">
+          Track every series, chapter and episode with a shelf that feels as good as the stories on it.
+        </p>
       </div>
-      <div className="absolute bottom-6 w-72 h-10 rounded-[50%] bg-violet-600/40 blur-2xl" />
+
+      <div className="w-full max-w-md mx-auto">
+        <Outlet />
+      </div>
     </div>
   )
 }
 
 export function AuthLayout({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 items-center p-4 lg:p-10 gap-10 overflow-hidden">
-      <div className="aurora"><span /></div>
-      <div className="aurora-grid" />
-
-      <div className="hidden lg:flex flex-col items-center text-center animate-fade-up">
-        <PosterCarousel3D />
-        <h2 className="text-5xl font-bold mt-4">
-          Your <span className="text-gradient">anime vault</span>
-        </h2>
-        <p className="mt-3 text-slate-500 dark:text-slate-400 max-w-sm">
-          Track every series, chapter and film with a shelf that feels as good as the stories on it.
-        </p>
-      </div>
-
-      <div className="w-full max-w-md mx-auto animate-fade-up [animation-delay:120ms]">
-        <div className="card-ring glass-strong rounded-3xl p-8 shadow-[0_30px_80px_-20px_rgba(124,58,237,.45)]">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-white shadow-lg">
-              M
-            </div>
-            <span className="font-display font-bold text-xl text-gradient">MediaShelf</span>
-          </div>
-          <h1 className="text-3xl font-bold mb-1">{title}</h1>
-          <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm">{subtitle}</p>
-          {children}
+    <div className="card-ring glass-strong rounded-3xl p-8 max-sm:p-6 animate-fade-up shadow-[0_30px_90px_-25px_rgba(168,85,247,.6)]">
+      <div className="flex items-center gap-3 mb-8 max-sm:mb-5">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-white shadow-lg">
+          O
         </div>
+        <span className="font-display font-bold text-xl text-white">
+          Otaku<span className="text-gradient">Vault</span>
+        </span>
       </div>
+      <h1 className="text-3xl font-bold mb-1">{title}</h1>
+      <p className="text-slate-400 mb-6 text-sm">{subtitle}</p>
+      {children}
+    </div>
+  )
+}
+
+export function AuthLoading() {
+  return (
+    <div className="flex flex-col gap-4 items-center justify-center py-24">
+      <div className="w-12 h-12 rounded-full border-4 border-violet-500/20 border-t-violet-500 animate-spin" />
+      <p className="text-gradient font-display font-semibold">Opening your library...</p>
     </div>
   )
 }

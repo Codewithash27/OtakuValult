@@ -22,11 +22,11 @@ function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
       <div className="relative w-10 h-10 shrink-0" style={{ perspective: 400 }}>
         <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 animate-[spin_8s_linear_infinite] blur-md opacity-70" />
         <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-white shadow-lg">
-          M
+          O
         </div>
       </div>
       <h1 className={`font-display font-bold ${size === 'lg' ? 'text-2xl' : 'text-xl'}`}>
-        <span className="text-gradient">MediaShelf</span>
+        Otaku<span className="text-gradient">Vault</span>
       </h1>
     </div>
   )

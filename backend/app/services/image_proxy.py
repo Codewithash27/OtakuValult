@@ -49,6 +49,10 @@ ALLOWED: list[tuple[re.Pattern, re.Pattern]] = [
         re.compile(r"^(img\d*|video-cdn\d*)\.gelbooru\.com$"),
         re.compile(r"^/(images|samples|thumbnails)/[\w/.-]+\.(jpe?g|png|gif|webp)$", re.IGNORECASE),
     ),
+    (
+        re.compile(r"^images\.pornhwadb\.com$"),
+        re.compile(r"^/(covers|characters|avatars)/[\w./-]+\.(webp|jpe?g|png)$", re.IGNORECASE),
+    ),
 ]
 
 

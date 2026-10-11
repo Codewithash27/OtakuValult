@@ -2,6 +2,7 @@ import { MediaItem, MediaType, anilistId } from '../types/media'
 import { PanelKind } from '../types/panel'
 import { metaFromMedia } from './anilistMeta'
 import { apiFetch, getApiBase } from './api'
+import { foundMediaFromPornhwadb, getPornhwadbSeries } from './pornhwadb'
 import { SAME_SEX_TAGS, anilist } from './importers'
 
 /** An AniList title the finder can pull images for. */
@@ -23,6 +24,10 @@ export interface FoundMedia {
   tags: string[]
   /** Shelf row when this search isn't tied to an AniList id (manual / import-only titles). */
   shelfItemId?: string
+  /** PornhwaDB export slug when opened from local catalogue search. */
+  pornhwadbSlug?: string
+  /** Synopsis from PornhwaDB (not stored on shelf notes by default). */
+  description?: string | null
 }
 
 export interface FoundArtist {
@@ -43,6 +48,7 @@ export type ImageGroup =
   | 'Gelbooru'
   | 'Gelbooru tags'
   | 'Web images'
+  | 'PornhwaDB'
 
 export interface FoundImage {
   /** Original image address; stored on the saved panel to spot duplicates. */
@@ -125,6 +131,14 @@ export async function foundMediaFromShelfItem(item: MediaItem, isAdult: boolean)
   if (id !== null) {
     const m = await getMedia(id)
     if (m) return { ...m, shelfItemId: item.id }
+  }
+  if (item.source === 'pornhwadb' && item.external_id) {
+    try {
+      const row = await getPornhwadbSeries(item.external_id)
+      return foundMediaFromPornhwadb(row, item.id)
+    } catch {
+      /* fall through to shelf-only stub */
+    }
   }
   return {
     id: 0,

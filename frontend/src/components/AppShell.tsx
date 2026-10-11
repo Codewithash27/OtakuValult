@@ -6,13 +6,15 @@ import { ThemeToggle } from './ThemeToggle'
 import { SearchBar } from './SearchBar'
 import { LibraryAssistant } from './LibraryAssistant'
 import { InstallAppButton } from './InstallAppButton'
+import { useContentMode } from '../hooks/useAdultFilter'
 
-const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean }[] = [
+const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean; creamyOnly?: boolean }[] = [
   { label: 'Library', icon: '📚', href: '/' },
   { label: 'Anime', icon: '⛩️', href: '/anime' },
   { label: 'Manga', icon: '📖', href: '/manga' },
   { label: 'Manhwa', icon: '✨', href: '/manhwa' },
   { label: 'Gallery', icon: '🖼️', href: '/gallery' },
+  { label: 'Top rated', icon: '⭐', href: '/community-lists', creamyOnly: true },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
   { label: 'Import', icon: '⬆️', href: '/import' },
 ]
@@ -36,11 +38,15 @@ function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
 function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [contentMode] = useContentMode()
+  const items = NAV_ITEMS.filter((item) => !item.creamyOnly || contentMode === 'creamy')
 
   return (
     <nav className="space-y-1.5">
-      {NAV_ITEMS.map((item) => {
-        const active = !item.disabled && pathname === item.href
+      {items.map((item) => {
+        const active =
+          !item.disabled &&
+          (pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`)))
         return (
           <button
             key={item.label}
@@ -79,6 +85,8 @@ export function AppShell() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [contentMode] = useContentMode()
+  const navVisible = NAV_ITEMS.filter((item) => !item.disabled && (!item.creamyOnly || contentMode === 'creamy'))
 
   const handleLogout = async () => {
     await signOut()
@@ -190,7 +198,7 @@ export function AppShell() {
 
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-3 left-3 right-3 z-40 glass-strong rounded-2xl flex shadow-2xl">
-        {NAV_ITEMS.filter((item) => !item.disabled).map((item) => (
+        {navVisible.map((item) => (
           <Link
             key={item.label}
             to={item.href}

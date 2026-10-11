@@ -23,6 +23,9 @@ env/
 .env
 .env.local
 
+# PornhwaDB export (user-provided)
+backend/data/pornhwa-export.json
+
 # Local one-off scripts (contain credentials)
 backend/add_items.py
 backend/add_library_items.py

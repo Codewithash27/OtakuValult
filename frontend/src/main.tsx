@@ -11,6 +11,7 @@ import Signup from './pages/Signup'
 import Library from './pages/Library'
 import Import from './pages/Import'
 import Gallery from './pages/Gallery'
+import CommunityLists from './pages/CommunityLists'
 import NotFound from './pages/NotFound'
 import { IntroSplash } from './components/IntroSplash'
 import { AuthShell } from './components/AuthLayout'
@@ -77,6 +78,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   <Route path="/manga" element={<Library key="manga" fixedType="manga" />} />
                   <Route path="/manhwa" element={<Library key="manhwa" fixedType="manhwa" />} />
                   <Route path="/gallery" element={<Gallery />} />
+                  <Route path="/community-lists" element={<CommunityLists />} />
+                  <Route path="/community-lists/series/:slug" element={<CommunityLists />} />
                   <Route path="/import" element={<Import />} />
                 </Route>
               </Route>

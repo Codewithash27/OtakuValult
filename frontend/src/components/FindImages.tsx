@@ -35,6 +35,16 @@ import {
   type ImageSearchPresetId,
 } from '../lib/imageFinder'
 import { apiFetch, backendHasImagesApi, getApiBase, isBackendConfigured } from '../lib/api'
+import {
+  fetchPornhwadbExportImages,
+  foundMediaFromPornhwadb,
+  getPornhwadbSeries,
+  pornhwadbExportToFoundImages,
+  pornhwadbStatus,
+  proxiedPornhwaCover,
+  searchPornhwadb,
+  type PornhwaSeries,
+} from '../lib/pornhwadb'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { useGalleryBlur } from '../hooks/usePanelAccess'
 import { usePanels, useUploadPanels } from '../hooks/usePanels'
@@ -42,7 +52,7 @@ import { MediaItem, anilistId } from '../types/media'
 import { useToast } from './Toast'
 import { TagEditor } from './TagEditor'
 
-type SearchMode = 'title' | 'artist'
+type SearchMode = 'title' | 'artist' | 'pornhwadb'
 
 function describeApiError(err: unknown): string {
   if (err instanceof GelbooruAuthError) return err.message
@@ -89,6 +99,7 @@ interface Props {
   initialMediaId?: number | null
   /** Opens image search for this shelf title (works for manual adult manhwa too). */
   initialShelfItemId?: string | null
+  initialPornhwadbSlug?: string | null
   onBusyChange: (busy: boolean) => void
   onDone: () => void
 }
@@ -109,6 +120,7 @@ export function FindImages({
   initialQuery = '',
   initialMediaId,
   initialShelfItemId,
+  initialPornhwadbSlug,
   onBusyChange,
   onDone,
 }: Props) {
@@ -151,6 +163,18 @@ export function FindImages({
     enabled: mode === 'artist' && q.length >= 2,
     staleTime: 10 * 60 * 1000,
   })
+  const phdbReady = useQuery({
+    queryKey: ['pornhwadb-status'],
+    queryFn: pornhwadbStatus,
+    enabled: allowAdult && isBackendConfigured(),
+    staleTime: 5 * 60 * 1000,
+  })
+  const phdbSearch = useQuery({
+    queryKey: ['pornhwadb-search', q],
+    queryFn: () => searchPornhwadb(q),
+    enabled: mode === 'pornhwadb' && q.length >= 2 && !!phdbReady.data?.configured,
+    staleTime: 2 * 60 * 1000,
+  })
   const alImages = useQuery({
     queryKey: ['find-images-anilist', media?.id],
     queryFn: () => aniListImages(media!),
@@ -160,14 +184,14 @@ export function FindImages({
   const mdImages = useQuery({
     queryKey: ['find-images-mangadex', media?.id],
     queryFn: () => mangaDexImages(media!),
-    enabled: media?.type === 'MANGA',
+    enabled: media?.type === 'MANGA' && (media?.id ?? 0) > 0,
     staleTime: 30 * 60 * 1000,
     retry: 1,
   })
   const kitsu = useQuery({
     queryKey: ['find-images-kitsu', media?.id],
     queryFn: () => kitsuImages(media!),
-    enabled: !!media,
+    enabled: !!media && (media.id ?? 0) > 0,
     staleTime: 30 * 60 * 1000,
     retry: 1,
   })
@@ -226,6 +250,12 @@ export function FindImages({
     staleTime: 60 * 60 * 1000,
   })
   const webQuery = media ? buildWebSearchQuery(media, imageSearchPreset) : ''
+  const phdbExport = useQuery({
+    queryKey: ['pornhwadb-export-images', media?.pornhwadbSlug],
+    queryFn: () => fetchPornhwadbExportImages(media!.pornhwadbSlug!),
+    enabled: !!media?.pornhwadbSlug && isBackendConfigured(),
+    staleTime: 30 * 60 * 1000,
+  })
   const web = useInfiniteQuery({
     queryKey: ['find-images-web', webQuery, allowAdult],
     queryFn: ({ pageParam }) => webSearchImages(webQuery, !allowAdult, pageParam),
@@ -252,9 +282,14 @@ export function FindImages({
     () => (media ? filterWebImagesForMedia(webListRaw, media, strictTitleFilter) : webListRaw),
     [webListRaw, media, strictTitleFilter],
   )
+  const pornhwadbImages = useMemo(
+    () => pornhwadbExportToFoundImages(phdbExport.data?.items ?? []),
+    [phdbExport.data],
+  )
   const images = useMemo(
     () =>
       [
+        ...pornhwadbImages,
         ...(alImages.data ?? []),
         ...(mdImages.data ?? []),
         ...(kitsu.data ?? []),
@@ -263,7 +298,7 @@ export function FindImages({
         ...gelbooruTagList,
         ...webList,
       ],
-    [alImages.data, mdImages.data, kitsu.data, wallpaperImages, gelbooruList, gelbooruTagList, webList],
+    [pornhwadbImages, alImages.data, mdImages.data, kitsu.data, wallpaperImages, gelbooruList, gelbooruTagList, webList],
   )
 
   useEffect(() => onBusyChange(upload.isPending), [upload.isPending]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -292,18 +327,38 @@ export function FindImages({
     }
   }, [initialShelfItemId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!initialPornhwadbSlug || !allowAdult) return
+    let cancelled = false
+    setMode('pornhwadb')
+    getPornhwadbSeries(initialPornhwadbSlug)
+      .then((row) => !cancelled && openMedia(foundMediaFromPornhwadb(row)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [initialPornhwadbSlug, allowAdult]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const openMedia = (m: FoundMedia) => {
     setMedia(m)
     setSelected(new Set())
     setAddToShelf(true)
-    const onShelf = m.shelfItemId ? items.find((i) => i.id === m.shelfItemId) : items.find((i) => anilistId(i) === m.id)
+    const onShelf = m.shelfItemId
+      ? items.find((i) => i.id === m.shelfItemId)
+      : m.pornhwadbSlug
+        ? items.find((i) => i.source === 'pornhwadb' && i.external_id === m.pornhwadbSlug)
+        : items.find((i) => anilistId(i) === m.id)
     const isAdult = m.adult || (!!onShelf && isAdultItem(onShelf))
     setAdult(isAdult)
     setTags(isAdult ? ['panel'] : [])
     if (allowAdult && isAdult) setGbRating('explicit')
-    setImageSearchPreset('title')
-    setStrictTitleFilter(false)
+    setImageSearchPreset(m.pornhwadbSlug || isAdult ? 'explicit' : 'title')
+    setStrictTitleFilter(!!m.pornhwadbSlug || isAdult)
     setProgress(null)
+  }
+
+  const openPornhwadb = (row: PornhwaSeries) => {
+    openMedia(foundMediaFromPornhwadb(row))
   }
 
   const openShelfItem = (item: MediaItem) => {
@@ -334,6 +389,36 @@ export function FindImages({
     if (!addToShelf) return null
     const { data: auth } = await supabase.auth.getUser()
     if (!auth.user) throw new Error('Not signed in')
+    if (m.pornhwadbSlug) {
+      const { data, error } = await supabase
+        .from('media_items')
+        .insert({
+          user_id: auth.user.id,
+          source: 'pornhwadb',
+          external_id: m.pornhwadbSlug,
+          media_type: 'manhwa',
+          title: m.title,
+          poster_url: m.cover,
+          year: m.year,
+          status: 'plan_to_watch',
+          rating: null,
+          progress: 0,
+          total: m.total,
+          notes: null,
+        })
+        .select('id')
+        .single()
+      if (!error) return data.id as string
+      if (error.code !== '23505') throw error
+      const existing = await supabase
+        .from('media_items')
+        .select('id')
+        .eq('user_id', auth.user.id)
+        .eq('source', 'pornhwadb')
+        .eq('external_id', m.pornhwadbSlug)
+        .maybeSingle()
+      return (existing.data?.id as string | undefined) ?? null
+    }
     const external_id = `${m.type === 'ANIME' ? 'anime' : 'manga'}:${m.id}`
     primeMeta({ [String(m.id)]: { a: m.adult, t: m.tags } })
     const { data, error } = await supabase
@@ -430,8 +515,20 @@ export function FindImages({
       more?: Paged
       extra?: ReactNode
     }[] = [
-      { group: 'Cover & banner', title: 'Cover & banner · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
-      { group: 'Characters', title: 'Characters · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
+      {
+        group: 'PornhwaDB',
+        title: `PornhwaDB export · cover & characters (${pornhwadbImages.length}${phdbExport.data?.total != null ? ` of ${phdbExport.data.total}` : ''})`,
+        query: phdbExport,
+        loading: 'Loading images from PornhwaDB export…',
+        empty: 'No images in the export for this title.',
+        grid: 'grid-cols-3 sm:grid-cols-5',
+        show: !!media.pornhwadbSlug,
+        extra: phdbExport.data?.note ? (
+          <p className="text-[11px] text-slate-500 mb-2">{phdbExport.data.note} Use <b>Web images</b> below for panel art.</p>
+        ) : null,
+      },
+      { group: 'Cover & banner', title: 'Cover & banner · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: media.id > 0 },
+      { group: 'Characters', title: 'Characters · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: media.id > 0 },
       {
         group: 'Volume covers',
         title: 'Volume covers · MangaDex',
@@ -441,7 +538,7 @@ export function FindImages({
         grid: 'grid-cols-3 sm:grid-cols-5',
         show: media.type === 'MANGA',
       },
-      { group: 'Kitsu art', title: 'Poster & cover · Kitsu', query: kitsu, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
+      { group: 'Kitsu art', title: 'Poster & cover · Kitsu', query: kitsu, grid: 'grid-cols-3 sm:grid-cols-5', show: media.id > 0 },
       {
         group: 'Wallpapers',
         title: 'Wallpapers · Wallhaven',
@@ -569,10 +666,15 @@ export function FindImages({
                 {TYPE_LABEL[media.mediaType]}
                 {media.year ? ` · ${media.year}` : ''}
                 {media.adult ? ' · 18+' : ''}
+                {media.pornhwadbSlug ? ' · PornhwaDB' : ''}
                 {shelfItem ? ' · on your shelf' : ''}
               </p>
             </div>
           </div>
+
+          {media.description && (
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-6">{media.description}</p>
+          )}
 
           {allowAdult && (
             <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-3 space-y-2">
@@ -790,10 +892,10 @@ export function FindImages({
     )
   }
 
-  const search = mode === 'title' ? titleSearch : artistSearch
+  const search = mode === 'title' ? titleSearch : mode === 'artist' ? artistSearch : phdbSearch
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-4">
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {(['title', 'artist'] as const).map((m) => (
           <button
             key={m}
@@ -803,9 +905,22 @@ export function FindImages({
             }}
             className={`chip !px-3 !py-1 !text-xs ${mode === m ? 'chip-active' : ''}`}
           >
-            {m === 'title' ? 'By title' : 'By artist / author'}
+            {m === 'title' ? 'AniList' : 'Artist'}
           </button>
         ))}
+        {allowAdult && (
+          <button
+            type="button"
+            onClick={() => {
+              setMode('pornhwadb')
+              setArtist(null)
+            }}
+            className={`chip !px-3 !py-1 !text-xs ${mode === 'pornhwadb' ? 'chip-active' : ''}`}
+            title="Search your local pornhwa-export.json on the server"
+          >
+            PornhwaDB
+          </button>
+        )}
       </div>
       <input
         autoFocus
@@ -814,7 +929,13 @@ export function FindImages({
           setQuery(e.target.value)
           setArtist(null)
         }}
-        placeholder={mode === 'title' ? 'Manhwa, manga or anime name…' : 'Artist or author name, e.g. So-Ryeong Gi'}
+        placeholder={
+          mode === 'pornhwadb'
+            ? 'Manhwa title from PornhwaDB export…'
+            : mode === 'title'
+              ? 'Manhwa, manga or anime name…'
+              : 'Artist or author name, e.g. So-Ryeong Gi'
+        }
         className="input-premium w-full"
       />
       {allowAdult && (
@@ -843,14 +964,56 @@ export function FindImages({
       )}
 
       <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
-        Covers from AniList &amp; MangaDex, wallpapers from Wallhaven, plus Gelbooru and web search in Creamy mode.
+        {mode === 'pornhwadb'
+          ? 'Uses pornhwa-export.json on the API server — metadata, cover, then web/Gelbooru for panels.'
+          : 'Covers from AniList & MangaDex, wallpapers from Wallhaven, plus Gelbooru and web search in Creamy mode.'}
       </p>
 
-      {q.length >= 2 && search.isLoading && <p className="text-sm text-slate-500 animate-pulse">Searching AniList…</p>}
+      {mode === 'pornhwadb' && phdbReady.data && !phdbReady.data.configured && (
+        <p className="text-xs text-amber-700 dark:text-amber-200 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2">
+          Export not on server. Copy <code className="text-violet-500">pornhwa-export.json</code> to{' '}
+          <code className="text-violet-500">backend/data/</code> and restart the API (see backend/data/README.md).
+        </p>
+      )}
+
+      {q.length >= 2 && search.isLoading && (
+        <p className="text-sm text-slate-500 animate-pulse">
+          {mode === 'pornhwadb' ? 'Searching PornhwaDB export…' : 'Searching AniList…'}
+        </p>
+      )}
       {search.isError && <p className="text-sm text-rose-500">{(search.error as Error).message}</p>}
 
       {mode === 'title' && titleSearch.data && (
         <MediaList list={titleSearch.data} items={items} onPick={openMedia} empty={`No titles found for “${q}”.`} />
+      )}
+
+      {mode === 'pornhwadb' && phdbSearch.data && (
+        <div className="space-y-1.5">
+          {!phdbSearch.data.length && <p className="text-sm text-slate-500">No manhwa in export for “{q}”.</p>}
+          {phdbSearch.data.map((row) => (
+            <button
+              key={row.slug}
+              type="button"
+              onClick={() => openPornhwadb(row)}
+              className="w-full flex items-center gap-3 p-2 rounded-xl text-left hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              {row.coverImage ? (
+                <img src={proxiedPornhwaCover(row.coverImage)} alt="" className="w-10 h-14 rounded-md object-cover shrink-0" />
+              ) : (
+                <div className="w-10 h-14 rounded-md bg-slate-500/20 shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm truncate">{row.title}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  {row.status ?? 'Unknown'}
+                  {row.releaseYear ? ` · ${row.releaseYear}` : ''}
+                  {row.totalChapters != null ? ` · ${row.totalChapters} ch` : ''}
+                </p>
+              </div>
+              <span className="text-xs text-violet-500 shrink-0">Open →</span>
+            </button>
+          ))}
+        </div>
       )}
 
       {mode === 'artist' && artistSearch.data && !artist && (

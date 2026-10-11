@@ -21,6 +21,8 @@ interface Props {
   initialFiles?: File[]
   presetItemId?: string | null
   initialTab?: Tab
+  initialPornhwadbSlug?: string | null
+  initialMediaId?: number | null
 }
 
 export function PanelUploadDialog({
@@ -32,6 +34,8 @@ export function PanelUploadDialog({
   initialFiles,
   presetItemId = null,
   initialTab = 'files',
+  initialPornhwadbSlug = null,
+  initialMediaId = null,
 }: Props) {
   const { showToast } = useToast()
   const upload = useUploadPanels()
@@ -168,8 +172,9 @@ export function PanelUploadDialog({
             isAdultItem={isAdultItem}
             tagSuggestions={tagSuggestions}
             initialQuery={presetItem?.title ?? ''}
-            initialMediaId={presetItem ? anilistId(presetItem) : null}
+            initialMediaId={initialMediaId ?? (presetItem ? anilistId(presetItem) : null)}
             initialShelfItemId={presetItemId}
+            initialPornhwadbSlug={initialPornhwadbSlug}
             onBusyChange={setFinding}
             onDone={onClose}
           />

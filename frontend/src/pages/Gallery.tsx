@@ -45,6 +45,13 @@ export default function Gallery() {
   const sort = params.get('sort') === 'old' ? 'old' : 'new'
   const openId = params.get('panel')
   const wantFind = params.get('find') === '1'
+  const phdbSlug = params.get('phdb')
+  const findAnilistId = useMemo(() => {
+    const raw = params.get('al')
+    if (!raw) return null
+    const n = Number.parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }, [params])
 
   const setParam = useCallback(
     (key: string, value: string | null) =>
@@ -126,10 +133,11 @@ export default function Gallery() {
   }
 
   useEffect(() => {
-    if (!wantFind || !titleId || uploadOpen) return
+    if (!wantFind || uploadOpen) return
+    if (!titleId && !phdbSlug && findAnilistId == null) return
     openUpload(undefined, 'find')
     setParam('find', null)
-  }, [wantFind, titleId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wantFind, titleId, phdbSlug, findAnilistId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (uploadOpen || openId) return
@@ -477,6 +485,8 @@ export default function Gallery() {
         initialFiles={droppedFiles}
         presetItemId={titleId}
         initialTab={uploadTab}
+        initialPornhwadbSlug={phdbSlug}
+        initialMediaId={findAnilistId}
       />
 
       <ConfirmDialog

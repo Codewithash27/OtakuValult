@@ -12,6 +12,7 @@ const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean
   { label: 'Anime', icon: '⛩️', href: '/anime' },
   { label: 'Manga', icon: '📖', href: '/manga' },
   { label: 'Manhwa', icon: '✨', href: '/manhwa' },
+  { label: 'Gallery', icon: '🖼️', href: '/gallery' },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
   { label: 'Import', icon: '⬆️', href: '/import' },
 ]

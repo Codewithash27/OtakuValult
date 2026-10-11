@@ -7,6 +7,7 @@ import { PosterImage } from './PosterImage'
 import { ConfirmDialog } from './ConfirmDialog'
 import { WatchLinks } from './WatchLinks'
 import { AdultToggle } from './AdultToggle'
+import { TitlePanels } from './TitlePanels'
 
 interface ItemDrawerProps {
   item: MediaItem | null
@@ -30,6 +31,9 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
   const [notes, setNotes] = useState('')
 
   const [isDirty, setIsDirty] = useState(false)
+  const [tab, setTab] = useState<'details' | 'panels'>('details')
+
+  useEffect(() => setTab('details'), [item?.id])
 
   useEffect(() => {
     if (item) {
@@ -213,7 +217,23 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
           </div>
         </div>
 
-        {/* Content */}
+        <div className="shrink-0 flex gap-1 px-4 pb-3">
+          {(['details', 'panels'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`chip !px-3 !py-1 !text-xs ${tab === t ? 'chip-active' : ''}`}
+            >
+              {t === 'details' ? 'Details' : '🖼️ Panels'}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'panels' ? (
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            <TitlePanels item={item} />
+          </div>
+        ) : (
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
           <WatchLinks item={item} />
 
@@ -321,6 +341,7 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
 
           <AdultToggle item={item} />
         </div>
+        )}
 
         {/* Footer */}
         <div className="shrink-0 p-4 flex gap-2 border-t border-slate-200 dark:border-white/10">

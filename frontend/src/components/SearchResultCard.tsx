@@ -15,8 +15,25 @@ export function SearchResultCard({
   isOnShelf = false,
   isAdding = false,
 }: SearchResultCardProps) {
+  const openAdd = () => {
+    if (!isOnShelf && !isAdding) onAdd(result)
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow p-3 flex gap-3">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={openAdd}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          openAdd()
+        }
+      }}
+      className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow p-3 flex gap-3 ${
+        isOnShelf ? 'cursor-default' : 'cursor-pointer'
+      }`}
+    >
       <div className="flex-shrink-0">
         <PosterImage
           src={result.poster_url}
@@ -76,7 +93,10 @@ export function SearchResultCard({
         </div>
 
         <button
-          onClick={() => onAdd(result)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAdd(result)
+          }}
           disabled={isOnShelf || isAdding}
           className="mt-2 self-start px-2 py-1 text-xs bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-semibold rounded transition-colors"
         >

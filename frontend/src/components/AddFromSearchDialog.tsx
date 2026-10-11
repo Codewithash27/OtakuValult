@@ -1,10 +1,12 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { useQuery } from '@tanstack/react-query'
 import { SearchResult } from '../types/search'
 import { Status } from '../types/media'
 import { useAddItem } from '../hooks/useMediaMutations'
 import { useToast } from './Toast'
 import { PosterImage } from './PosterImage'
+import { fetchAniListDescription } from '../lib/mediaDescription'
 
 interface AddFromSearchDialogProps {
   result: SearchResult | null
@@ -56,7 +58,7 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
         rating: ratingNum,
         progress: 0,
         total: result.total,
-        notes: result.overview || null,
+        notes: null,
         source: result.source,
         external_id: result.external_id,
       },
@@ -75,6 +77,21 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
       }
     )
   }
+
+  const anilistNumericId = useMemo(() => {
+    if (!result || result.source !== 'anilist') return null
+    const match = /^(?:anime:|manga:)?(\d+)$/.exec(result.external_id)
+    return match ? Number(match[1]) : null
+  }, [result])
+
+  const { data: fullSynopsis, isLoading: synopsisLoading } = useQuery({
+    queryKey: ['media-description', anilistNumericId],
+    queryFn: () => fetchAniListDescription(anilistNumericId!),
+    enabled: isOpen && anilistNumericId !== null,
+    staleTime: 24 * 60 * 60 * 1000,
+  })
+
+  const synopsis = fullSynopsis || result?.overview || null
 
   if (!isOpen || !result) return null
 
@@ -121,6 +138,19 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
           </div>
 
           <div className="space-y-4 px-5 pb-5">
+            {(synopsisLoading || synopsis) && (
+              <div>
+                <p className={label}>About</p>
+                {synopsisLoading && !synopsis ? (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">Loading synopsis…</p>
+                ) : (
+                  <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300 max-h-40 overflow-y-auto">
+                    {synopsis}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Status */}
             <div>
               <label className={label}>Status</label>

@@ -8,6 +8,8 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { WatchLinks } from './WatchLinks'
 import { AdultToggle } from './AdultToggle'
 import { TitlePanels } from './TitlePanels'
+import { useMediaDescription } from '../hooks/useMediaDescription'
+import { anilistId } from '../types/media'
 
 interface ItemDrawerProps {
   item: MediaItem | null
@@ -156,6 +158,11 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
 
   const requestClose = () => (isDirty ? setShowConfirmDiscard(true) : closeDrawer())
 
+  const { data: fetchedSynopsis, isLoading: synopsisLoading } = useMediaDescription(item, isOpen)
+  const hasAnilist = item ? anilistId(item) !== null : false
+  const synopsis =
+    fetchedSynopsis ?? (!hasAnilist && item?.notes?.trim() ? item.notes.trim() : null)
+
   if (!isOpen || !item) return null
 
   const label = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5'
@@ -235,6 +242,22 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
           </div>
         ) : (
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+          {(synopsisLoading || synopsis) && (
+            <div className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/50 dark:bg-white/[0.03] p-3.5">
+              <p className={label}>About</p>
+              {synopsisLoading && !synopsis ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">Loading synopsis…</p>
+              ) : (
+                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{synopsis}</p>
+              )}
+              {(item.media_type === 'manga' || item.media_type === 'manhwa') && (
+                <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  Use the read links below to open this title on Webtoon, Tapas, or other sites.
+                </p>
+              )}
+            </div>
+          )}
+
           <WatchLinks item={item} />
 
           <div className="grid grid-cols-2 gap-3">

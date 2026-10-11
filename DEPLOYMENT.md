@@ -88,8 +88,10 @@ Tip: `python scripts/deploy_env.py --write` checks your local env files and writ
 
 ### Check it
 
-Open `https://otakuvault-api.onrender.com/api/health` (your URL may differ) → should return JSON.
-API docs: `https://otakuvault-api.onrender.com/docs`.
+Open `https://otakuvault-api.onrender.com/api/health` (your URL may differ) → should return JSON with `"capabilities": {"images": true, ...}`.
+API docs: `https://otakuvault-api.onrender.com/docs` — must list **`/api/images/mangadex`**, **`/api/images/web-search`**, etc. If you only see `/api/search`, the service is on an **old deploy** → **Manual Deploy → Deploy latest commit** (Root Directory `backend`).
+
+> **VITE_API_URL** on Vercel = backend **origin only** (e.g. `https://otakuvalult.onrender.com`). Do **not** append `/api` or `/api/images`.
 
 > Free plan sleeps after ~15 min idle. First request after sleep takes ~30–60 s. Upgrade or ping `/api/health` with a free uptime monitor (e.g. UptimeRobot every 10 min) to keep it warm.
 

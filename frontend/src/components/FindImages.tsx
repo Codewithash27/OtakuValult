@@ -34,7 +34,7 @@ import {
   themeTagFromPreset,
   type ImageSearchPresetId,
 } from '../lib/imageFinder'
-import { apiFetch, getApiBase, isBackendConfigured } from '../lib/api'
+import { apiFetch, backendHasImagesApi, getApiBase, isBackendConfigured } from '../lib/api'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { useGalleryBlur } from '../hooks/usePanelAccess'
 import { usePanels, useUploadPanels } from '../hooks/usePanels'
@@ -53,6 +53,9 @@ function describeApiError(err: unknown): string {
     if (err.message.startsWith('NETWORK:')) {
       const base = err.message.slice(8)
       return `Can't reach the API at ${base} — wrong URL, CORS, or Render is waking up (wait ~60s).`
+    }
+    if (err.message === 'STALE_BACKEND') {
+      return 'Render API is outdated (no /api/images). Redeploy the backend from latest GitHub main.'
     }
   }
   return "Didn't load."
@@ -201,7 +204,12 @@ export function FindImages({
   })
   const backendHealth = useQuery({
     queryKey: ['api-health', getApiBase()],
-    queryFn: () => apiFetch<{ status?: string }>('/api/health'),
+    queryFn: async () => {
+      const health = await apiFetch<{ status?: string; capabilities?: { images?: boolean } }>('/api/health')
+      const hasImages = await backendHasImagesApi()
+      if (!hasImages) throw new Error('STALE_BACKEND')
+      return health
+    },
     enabled: isBackendConfigured(),
     staleTime: 30_000,
     retry: 1,
@@ -617,12 +625,30 @@ export function FindImages({
             <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-800 dark:text-rose-100 space-y-1">
               <p className="font-semibold">Backend not responding</p>
               <p>{describeApiError(backendHealth.error)}</p>
-              <p>
-                On Render, set <code className="text-violet-500">FRONTEND_ORIGIN_REGEX</code> to{' '}
-                <code className="text-violet-500">https://otaku-valult.*\.vercel\.app</code> and redeploy the API after
-                gallery updates (<code className="text-violet-500">pip install -r requirements.txt</code> for{' '}
-                <code className="text-violet-500">ddgs</code>).
-              </p>
+              {backendHealth.error instanceof Error && backendHealth.error.message === 'STALE_BACKEND' ? (
+                <p>
+                  Open{' '}
+                  <a
+                    className="text-violet-600 dark:text-violet-300 underline font-semibold"
+                    href={`${getApiBase()}/docs`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getApiBase()}/docs
+                  </a>{' '}
+                  — you should see <code className="text-violet-500">/api/images/…</code> routes. If not, Render →
+                  your service → <b>Manual Deploy → Deploy latest commit</b> (root directory <code className="text-violet-500">backend</code>
+                  ).
+                </p>
+              ) : (
+                <p>
+                  Set <code className="text-violet-500">VITE_API_URL</code> to the origin only (e.g.{' '}
+                  <code className="text-violet-500">https://otakuvalult.onrender.com</code>, no{' '}
+                  <code className="text-violet-500">/api</code> suffix). On Render,{' '}
+                  <code className="text-violet-500">FRONTEND_ORIGIN_REGEX</code> ={' '}
+                  <code className="text-violet-500">https://otaku-valult.*\.vercel\.app</code>.
+                </p>
+              )}
               <button type="button" onClick={() => backendHealth.refetch()} className="font-semibold underline">
                 Retry connection
               </button>

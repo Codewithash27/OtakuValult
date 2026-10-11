@@ -28,6 +28,7 @@ export default function Gallery() {
   const remove = useDeletePanels()
 
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadTab, setUploadTab] = useState<'files' | 'find'>('files')
   const [droppedFiles, setDroppedFiles] = useState<File[] | undefined>()
   const [dragging, setDragging] = useState(false)
   const [selecting, setSelecting] = useState(false)
@@ -117,8 +118,9 @@ export default function Gallery() {
       return next
     })
 
-  const openUpload = (files?: File[]) => {
+  const openUpload = (files?: File[], tab: 'files' | 'find' = 'files') => {
     setDroppedFiles(files)
+    setUploadTab(tab)
     setUploadOpen(true)
   }
 
@@ -229,6 +231,9 @@ export default function Gallery() {
             {selecting ? 'Done' : '☑ Select'}
           </button>
         )}
+        <button onClick={() => openUpload(undefined, 'find')} className="chip !px-3 !py-1.5 !text-xs">
+          🔍 Find images
+        </button>
         <button onClick={() => openUpload()} className="btn-glow !py-1.5 text-sm">
           ⬆ Upload
         </button>
@@ -332,24 +337,34 @@ export default function Gallery() {
           <div className="text-4xl mb-2">🛠️</div>
           <h2 className="font-bold text-lg">Gallery needs a one-time setup</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Run <code className="px-1 rounded bg-black/10 dark:bg-white/10">supabase/migrations/20261011000001_panels_gallery.sql</code> in
-            the Supabase SQL Editor, then reload.
+            Run <code className="px-1 rounded bg-black/10 dark:bg-white/10">supabase/migrations/20261011000001_panels_gallery.sql</code>{' '}
+            and then <code className="px-1 rounded bg-black/10 dark:bg-white/10">20261011000002_panels_official_art.sql</code> in the
+            Supabase SQL Editor, then reload.
           </p>
         </div>
       ) : error ? (
         <p className="text-rose-500 text-sm">{(error as Error).message}</p>
       ) : visible.length === 0 ? (
-        <button
-          onClick={() => openUpload()}
-          className="w-full rounded-3xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 p-12 text-center transition-colors"
-        >
-          <div className="text-5xl mb-3">🖼️</div>
-          <h2 className="text-lg font-bold">Start your gallery</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-            Drop panels, stickers or edits here, choose files, or paste a screenshot. Link them to titles on your shelf and tag them
-            to find them later. Only you can see them.
+        <div className="space-y-3">
+          <button
+            onClick={() => openUpload()}
+            className="w-full rounded-3xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 p-12 text-center transition-colors"
+          >
+            <div className="text-5xl mb-3">🖼️</div>
+            <h2 className="text-lg font-bold">Start your gallery</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+              Drop panels, stickers or edits here, choose files, or paste a screenshot. Link them to titles on your shelf and tag them
+              to find them later. Only you can see them.
+            </p>
+          </button>
+          <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+            Or{' '}
+            <button onClick={() => openUpload(undefined, 'find')} className="font-semibold text-violet-500 hover:underline">
+              🔍 find official art
+            </button>{' '}
+            by title or artist name.
           </p>
-        </button>
+        </div>
       ) : filtered.length === 0 ? (
         <p className="text-center text-sm text-slate-500 py-12">No images match these filters.</p>
       ) : (
@@ -445,6 +460,7 @@ export default function Gallery() {
         tagSuggestions={tagSuggestions}
         initialFiles={droppedFiles}
         presetItemId={titleId}
+        initialTab={uploadTab}
       />
 
       <ConfirmDialog

@@ -37,19 +37,39 @@ export interface UploadOptions {
   onProgress?: (done: number, total: number) => void
 }
 
+/** One image to save; `load` is used for images that still have to be downloaded. */
+export interface UploadEntry {
+  name: string
+  file?: File
+  load?: () => Promise<File>
+  kind?: PanelKind
+  tags?: string[]
+  caption?: string | null
+  sourceUrl?: string | null
+}
+
+function uploadError(err: unknown) {
+  const message = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String(err.message) : 'failed'
+  if (/source_url|panels_kind_check/.test(message)) return 'run the "panels_official_art" SQL migration in Supabase first'
+  if (/duplicate key/.test(message)) return 'already in your gallery'
+  return message
+}
+
 export function useUploadPanels() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ files, ...opts }: UploadOptions & { files: File[] }) => {
+    mutationFn: async ({ files = [], entries = [], ...opts }: UploadOptions & { files?: File[]; entries?: UploadEntry[] }) => {
       const { data: auth } = await supabase.auth.getUser()
       const uid = auth.user?.id
       if (!uid) throw new Error('Not signed in')
 
-      const tags = [...new Set(opts.tags.map(normalizeTag).filter(Boolean))]
+      const all: UploadEntry[] = [...files.map((file) => ({ name: file.name, file })), ...entries]
       const failed: string[] = []
       let done = 0
-      for (const file of files) {
+      for (const entry of all) {
         try {
+          const file = entry.file ?? (await entry.load!())
+          const tags = [...new Set([...opts.tags, ...(entry.tags ?? [])].map(normalizeTag).filter(Boolean))]
           const img = await processImage(file)
           const id = crypto.randomUUID()
           const fullPath = `${uid}/${id}.${img.ext}`
@@ -67,22 +87,24 @@ export function useUploadPanels() {
             media_item_id: opts.mediaItemId,
             storage_path: fullPath,
             thumb_path: thumbPath,
-            kind: opts.kind,
+            kind: entry.kind ?? opts.kind,
             width: img.width,
             height: img.height,
             adult: opts.adult,
             tags,
+            ...(entry.caption ? { caption: entry.caption } : {}),
+            ...(entry.sourceUrl ? { source_url: entry.sourceUrl } : {}),
           })
           if (error) {
             await store.remove([fullPath, thumbPath])
             throw error
           }
         } catch (err) {
-          failed.push(`${file.name}: ${err instanceof Error ? err.message : 'failed'}`)
+          failed.push(`${entry.name}: ${uploadError(err)}`)
         }
-        opts.onProgress?.(++done, files.length)
+        opts.onProgress?.(++done, all.length)
       }
-      return { uploaded: files.length - failed.length, failed }
+      return { uploaded: all.length - failed.length, failed }
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: PANELS_KEY }),
   })

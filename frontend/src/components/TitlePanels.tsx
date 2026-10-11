@@ -15,6 +15,11 @@ export function TitlePanels({ item }: { item: MediaItem }) {
   const { visible, isAdultPanel, isAdultItem } = usePanelAccess(allPanels, items)
   const [blur] = useGalleryBlur()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadTab, setUploadTab] = useState<'files' | 'find'>('files')
+  const openUpload = (tab: 'files' | 'find') => {
+    setUploadTab(tab)
+    setUploadOpen(true)
+  }
 
   const panels = useMemo(() => visible.filter((p) => p.media_item_id === item.id), [visible, item.id])
   const shown = panels.slice(0, PREVIEW_LIMIT)
@@ -28,15 +33,26 @@ export function TitlePanels({ item }: { item: MediaItem }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2">
-        <button
-          onClick={() => setUploadOpen(true)}
-          className="aspect-[3/4] rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 hover:text-violet-500 grid place-items-center text-center text-xs font-semibold text-slate-500 transition-colors"
-        >
-          <span>
-            <span className="block text-2xl">＋</span>
-            Add images
-          </span>
-        </button>
+        <div className="aspect-[3/4] grid grid-rows-2 gap-2">
+          <button
+            onClick={() => openUpload('files')}
+            className="rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 hover:text-violet-500 grid place-items-center text-center text-[11px] font-semibold text-slate-500 transition-colors"
+          >
+            <span>
+              <span className="block text-lg leading-none mb-0.5">＋</span>
+              Upload
+            </span>
+          </button>
+          <button
+            onClick={() => openUpload('find')}
+            className="rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 hover:text-violet-500 grid place-items-center text-center text-[11px] font-semibold text-slate-500 transition-colors"
+          >
+            <span>
+              <span className="block text-lg leading-none mb-0.5">🔍</span>
+              Find art
+            </span>
+          </button>
+        </div>
         {isLoading
           ? Array.from({ length: 5 }, (_, i) => <div key={i} className="aspect-[3/4] rounded-xl bg-white/5 animate-pulse" />)
           : shown.map((p) => {
@@ -82,6 +98,7 @@ export function TitlePanels({ item }: { item: MediaItem }) {
         isAdultItem={isAdultItem}
         tagSuggestions={tagSuggestions}
         presetItemId={item.id}
+        initialTab={uploadTab}
       />
     </div>
   )

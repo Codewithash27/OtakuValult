@@ -1,4 +1,4 @@
-export type PanelKind = 'panel' | 'sticker' | 'edit'
+export type PanelKind = 'panel' | 'sticker' | 'edit' | 'art'
 export type Orientation = 'portrait' | 'landscape' | 'square'
 
 export interface Panel {
@@ -13,6 +13,8 @@ export interface Panel {
   adult: boolean
   tags: string[]
   caption: string | null
+  /** Where a found image was downloaded from; null for the user's own uploads. */
+  source_url?: string | null
   created_at: string
 }
 
@@ -20,6 +22,7 @@ export const PANEL_KINDS: { id: PanelKind; label: string; plural: string }[] = [
   { id: 'panel', label: 'Panel', plural: 'Panels' },
   { id: 'sticker', label: 'Sticker', plural: 'Stickers' },
   { id: 'edit', label: 'Edit', plural: 'Edits' },
+  { id: 'art', label: 'Art', plural: 'Official art' },
 ]
 
 export const ORIENTATIONS: { id: Orientation; label: string }[] = [

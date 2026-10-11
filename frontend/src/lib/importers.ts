@@ -40,7 +40,7 @@ interface AniListMedia {
   tags: { name: string; rank: number | null }[] | null
 }
 
-const SAME_SEX_TAGS = ["Boys' Love", 'Shounen Ai', 'Yuri', 'Shoujo Ai', "Girls' Love"]
+export const SAME_SEX_TAGS = ["Boys' Love", 'Shounen Ai', 'Yuri', 'Shoujo Ai', "Girls' Love"]
 
 const ANILIST_URL = 'https://graphql.anilist.co'
 
@@ -61,7 +61,7 @@ query ($ids: [Int], $type: MediaType) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function anilist<T>(query: string, variables: Record<string, unknown>, attempt = 0): Promise<T> {
+export async function anilist<T>(query: string, variables: Record<string, unknown>, attempt = 0): Promise<T> {
   const res = await fetch(ANILIST_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

@@ -3,6 +3,8 @@ import { supabase } from './supabase'
 export const MODE_KEY = 'content-mode'
 export const OVERRIDES_KEY = 'adult-overrides'
 export const WATCH_LINK_PREFIX = 'watch-link:'
+/** Per-title edited "Where to read/watch" button list, stored as JSON. */
+export const LINK_LIST_PREFIX = 'link-list:'
 export const PREFS_CHANGED_EVENT = 'adult-filter-changed'
 export const WATCH_LINKS_CHANGED_EVENT = 'watch-links-changed'
 const SYNCED_KEY = 'vault-prefs-synced'
@@ -11,13 +13,16 @@ interface VaultPrefs {
   contentMode: 'creamy' | 'clean'
   adultOverrides: Record<string, boolean>
   watchLinks: Record<string, string>
+  linkLists?: Record<string, string>
 }
 
 function collectLocal(): VaultPrefs {
   const watchLinks: Record<string, string> = {}
+  const linkLists: Record<string, string> = {}
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
     if (key?.startsWith(WATCH_LINK_PREFIX)) watchLinks[key.slice(WATCH_LINK_PREFIX.length)] = localStorage.getItem(key) || ''
+    if (key?.startsWith(LINK_LIST_PREFIX)) linkLists[key.slice(LINK_LIST_PREFIX.length)] = localStorage.getItem(key) || ''
   }
   let adultOverrides: Record<string, boolean> = {}
   try {
@@ -29,12 +34,13 @@ function collectLocal(): VaultPrefs {
     contentMode: localStorage.getItem(MODE_KEY) === 'clean' ? 'clean' : 'creamy',
     adultOverrides,
     watchLinks,
+    linkLists,
   }
 }
 
 function clearLocal() {
   Object.keys(localStorage)
-    .filter((k) => k.startsWith(WATCH_LINK_PREFIX))
+    .filter((k) => k.startsWith(WATCH_LINK_PREFIX) || k.startsWith(LINK_LIST_PREFIX))
     .forEach((k) => localStorage.removeItem(k))
   localStorage.removeItem(OVERRIDES_KEY)
   localStorage.removeItem(MODE_KEY)
@@ -45,6 +51,7 @@ function applyToLocal(prefs: VaultPrefs) {
   localStorage.setItem(MODE_KEY, prefs.contentMode)
   localStorage.setItem(OVERRIDES_KEY, JSON.stringify(prefs.adultOverrides || {}))
   Object.entries(prefs.watchLinks || {}).forEach(([id, url]) => url && localStorage.setItem(WATCH_LINK_PREFIX + id, url))
+  Object.entries(prefs.linkLists || {}).forEach(([id, list]) => list && localStorage.setItem(LINK_LIST_PREFIX + id, list))
   window.dispatchEvent(new Event(PREFS_CHANGED_EVENT))
   window.dispatchEvent(new Event(WATCH_LINKS_CHANGED_EVENT))
 }
@@ -87,6 +94,7 @@ export function initPrefsSync() {
         contentMode: remote?.contentMode ?? local.contentMode,
         adultOverrides: { ...local.adultOverrides, ...remote?.adultOverrides },
         watchLinks: { ...local.watchLinks, ...remote?.watchLinks },
+        linkLists: { ...local.linkLists, ...remote?.linkLists },
       }
       applyToLocal(merged)
       localStorage.setItem(SYNCED_KEY, uid)

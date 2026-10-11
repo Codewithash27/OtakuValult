@@ -10,6 +10,8 @@ interface PosterWallProps {
 }
 
 const MIN_PER_COLUMN = 8
+// Every poster is rendered twice for the endless scroll, so large shelves are sampled.
+const MAX_POSTERS = 160
 
 function columnCount(width: number) {
   return Math.min(9, Math.max(3, Math.floor(width / 190)))
@@ -107,7 +109,7 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
     if (!items.length) return []
     const count = columnCount(width)
     const cols: MediaItem[][] = Array.from({ length: count }, () => [])
-    const shuffled = [...items].sort(() => Math.random() - 0.5)
+    const shuffled = [...items].sort(() => Math.random() - 0.5).slice(0, MAX_POSTERS)
     shuffled.forEach((item, i) => cols[i % count].push(item))
     return cols.map((col, c) => {
       let filled = col.length ? col : shuffled.slice(c % shuffled.length, (c % shuffled.length) + 1)

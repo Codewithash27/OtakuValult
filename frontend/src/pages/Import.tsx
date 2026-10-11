@@ -4,12 +4,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../hooks/useSession'
 import { useMediaItems } from '../hooks/useMediaItems'
-import { setAdultOverrides, useContentMode } from '../hooks/useAdultFilter'
+import { cacheAdultFlags, setAdultOverrides, useContentMode } from '../hooks/useAdultFilter'
 import { useToast } from '../components/Toast'
 import { PosterImage } from '../components/PosterImage'
 import { StatusBadge } from '../components/StatusBadge'
 import { ImportEntry, fetchAniListUser, importMalFiles, parsePastedTitles, searchPastedTitles } from '../lib/importers'
-import { MediaItem, Status, STATUS_LABELS } from '../types/media'
+import { MediaItem, Status, STATUS_LABELS, anilistId } from '../types/media'
 
 type Source = 'anilist' | 'mal' | 'paste'
 type Mode = 'skip' | 'update'
@@ -23,6 +23,7 @@ interface Row extends ImportEntry {
 
 const BATCH = 100
 const MAX_PASTE = 300
+const PREVIEW_STEP = 200
 
 const SOURCES: { id: Source; label: string }[] = [
   { id: 'anilist', label: 'AniList' },
@@ -59,6 +60,7 @@ export default function Import() {
   const [mode, setMode] = useState<Mode>('skip')
   const [includeAdult, setIncludeAdult] = useState(contentMode === 'creamy')
   const [hideSameSex, setHideSameSex] = useState(false)
+  const [visible, setVisible] = useState(PREVIEW_STEP)
   const [saved, setSaved] = useState(0)
   const [result, setResult] = useState({ added: 0, updated: 0, skipped: 0 })
 
@@ -92,6 +94,7 @@ export default function Import() {
   const showPreview = (list: ImportEntry[]) => {
     if (!list.length) throw new Error('That list is empty. Nothing to import.')
     setEntries(list)
+    setVisible(PREVIEW_STEP)
     setSelected(new Set(list.map((e) => e.key)))
     setPhase('preview')
   }
@@ -126,10 +129,19 @@ export default function Import() {
     }
   }
 
-  const toPayload = ({ key: _k, query: _q, alternatives: _a, adult: _ad, existing, titleMatch: _t, ...e }: Row) => ({
-    ...e,
-    notes: e.notes ?? existing?.notes ?? null,
+  const toPayload = (r: Row) => ({
     user_id: user!.id,
+    source: r.source,
+    external_id: r.external_id,
+    media_type: r.media_type,
+    title: r.title,
+    poster_url: r.poster_url,
+    year: r.year,
+    status: r.status,
+    rating: r.rating,
+    progress: r.progress,
+    total: r.total,
+    notes: r.notes ?? r.existing?.notes ?? null,
   })
 
   const runImport = async () => {
@@ -141,6 +153,12 @@ export default function Import() {
     let updated = 0
     const linked = chosen.filter((r) => r.source !== 'manual')
     const manual = chosen.filter((r) => r.source === 'manual')
+    const flags: Record<string, boolean> = {}
+    for (const r of linked) {
+      const id = anilistId(r)
+      if (id !== null) flags[String(id)] = r.adult
+    }
+    cacheAdultFlags(flags)
     try {
       for (let i = 0; i < linked.length; i += BATCH) {
         const batch = linked.slice(i, i + BATCH)
@@ -481,7 +499,7 @@ export default function Import() {
           </div>
 
           <div className="max-h-[52vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/10 divide-y divide-slate-200 dark:divide-white/5">
-            {rows.map((r) => {
+            {rows.slice(0, visible).map((r) => {
               const can = importable(r)
               const alternatives = r.alternatives ?? []
               return (
@@ -556,6 +574,14 @@ export default function Import() {
                 </div>
               )
             })}
+            {rows.length > visible && (
+              <button
+                onClick={() => setVisible((v) => v + PREVIEW_STEP)}
+                className="w-full p-3 text-sm font-semibold text-violet-500 hover:bg-violet-500/5"
+              >
+                Show more ({rows.length - visible} not shown · they're still included in the import)
+              </button>
+            )}
           </div>
 
           {phase === 'saving' ? (

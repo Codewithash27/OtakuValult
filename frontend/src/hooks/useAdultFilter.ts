@@ -68,21 +68,54 @@ export function useAdultOverride(itemId: string) {
 
 const QUERY = `query($ids:[Int]){ Page(perPage:50){ media(id_in:$ids){ id isAdult genres } } }`
 
+const CACHE_KEY = 'anilist-adult-cache'
+
+function readCache(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+/** Stores known AniList adult flags so the library doesn't have to look them up again. */
+export function cacheAdultFlags(flags: Record<string, boolean>) {
+  if (!Object.keys(flags).length) return
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...readCache(), ...flags }))
+  } catch {
+    /* storage full; flags will be fetched again */
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 async function fetchAniListAdult(ids: number[]): Promise<Record<string, boolean>> {
-  const result: Record<string, boolean> = {}
-  for (let i = 0; i < ids.length; i += 50) {
-    const res = await fetch('https://graphql.anilist.co', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ query: QUERY, variables: { ids: ids.slice(i, i + 50) } }),
-    })
+  const cache = readCache()
+  const missing = ids.filter((id) => !(String(id) in cache))
+  for (let i = 0; i < missing.length; i += 50) {
+    const batch = missing.slice(i, i + 50)
+    let res: Response
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ query: QUERY, variables: { ids: batch } }),
+      })
+      if (res.status !== 429 || attempt >= 3) break
+      await sleep((Number(res.headers.get('Retry-After')) || 30) * 1000)
+    }
     if (!res.ok) throw new Error(`AniList ${res.status}`)
     const json = await res.json()
+    const found: Record<string, boolean> = {}
     for (const m of json?.data?.Page?.media ?? []) {
-      result[String(m.id)] = !!m.isAdult || (m.genres ?? []).some((g: string) => ADULT_GENRES.includes(g))
+      found[String(m.id)] = !!m.isAdult || (m.genres ?? []).some((g: string) => ADULT_GENRES.includes(g))
     }
+    Object.assign(cache, found)
+    cacheAdultFlags(found)
+    if (i + 50 < missing.length) await sleep(700)
   }
-  return result
+  return cache
 }
 
 /** Returns a function telling whether an item is 18+ (AniList data, overridden by the user's manual flag). */
@@ -93,13 +126,16 @@ export function useIsAdult(items: MediaItem[]) {
     [items]
   )
 
-  const { data: flags = {} } = useQuery({
-    queryKey: ['anilist-adult', ids.join(',')],
+  const idsKey = ids.join(',')
+  const cached = useMemo(() => readCache(), [idsKey])
+  const { data } = useQuery({
+    queryKey: ['anilist-adult', idsKey],
     queryFn: () => fetchAniListAdult(ids),
     enabled: ids.length > 0,
     staleTime: Infinity,
-    retry: 1,
+    retry: 2,
   })
+  const flags = data ?? cached
 
   const overrides = useStored(readOverrides)
 

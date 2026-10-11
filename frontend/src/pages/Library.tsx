@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { MediaType, Status } from '../types/media'
@@ -16,6 +16,7 @@ import { PosterWall } from '../components/PosterWall'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 
 const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa', 'movie', 'tv']
+const PAGE_SIZE = 60
 
 export default function Library() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -89,6 +90,21 @@ export default function Library() {
     }
     return copy
   }, [filtered, sort])
+
+  const [limit, setLimit] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => setLimit(PAGE_SIZE), [mediaType, status, searchQ, sort, contentMode])
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || limit >= sorted.length) return
+    const observer = new IntersectionObserver(
+      (entries) => entries[0].isIntersecting && setLimit((l) => l + PAGE_SIZE),
+      { rootMargin: '800px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [limit, sorted.length])
+  const shown = sorted.slice(0, limit)
 
   // Count by status
   const counts = useMemo(() => {
@@ -278,19 +294,24 @@ export default function Library() {
           />
         ) : view === 'grid' ? (
           <div key={`${mediaType}-${status}-${sort}`} className="stagger grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-            {sorted.map((item, i) => (
-              <div key={item.id} style={{ animationDelay: `${Math.min(i, 15) * 45}ms` }}>
+            {shown.map((item, i) => (
+              <div key={item.id} style={{ animationDelay: `${Math.min(i % PAGE_SIZE, 15) * 45}ms` }}>
                 <MediaCard item={item} />
               </div>
             ))}
           </div>
         ) : (
           <div key={`${mediaType}-${status}-${sort}`} className="stagger space-y-4">
-            {sorted.map((item, i) => (
-              <div key={item.id} style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }}>
+            {shown.map((item, i) => (
+              <div key={item.id} style={{ animationDelay: `${Math.min(i % PAGE_SIZE, 15) * 40}ms` }}>
                 <MediaRow item={item} />
               </div>
             ))}
+          </div>
+        )}
+        {shown.length < sorted.length && (
+          <div ref={sentinelRef} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            Showing {shown.length} of {sorted.length}…
           </div>
         )}
         {allItems.length === 0 && (

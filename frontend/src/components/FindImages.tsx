@@ -1,18 +1,28 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { primeMeta } from '../lib/anilistMeta'
 import {
   FoundArtist,
   FoundImage,
   FoundMedia,
+  GELBOORU_CHANGED_EVENT,
+  GelbooruAuthError,
+  GelbooruCredentials,
+  GelbooruRating,
   ImageGroup,
   aniListImages,
   downloadImage,
+  gelbooruImages,
   getMedia,
+  parseGelbooruCredentials,
+  readGelbooruCredentials,
+  saveGelbooruCredentials,
+  kitsuImages,
   mangaDexImages,
   searchArtists,
   searchTitles,
+  wallhavenImages,
 } from '../lib/imageFinder'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { useGalleryBlur } from '../hooks/usePanelAccess'
@@ -23,8 +33,24 @@ import { TagEditor } from './TagEditor'
 
 type SearchMode = 'title' | 'artist'
 
-const GROUPS: ImageGroup[] = ['Cover & banner', 'Characters', 'Volume covers']
 const TYPE_LABEL: Record<string, string> = { anime: 'Anime', manga: 'Manga', manhwa: 'Manhwa' }
+const GELBOORU_RATINGS: { id: GelbooruRating | null; label: string }[] = [
+  { id: null, label: 'All' },
+  { id: 'general', label: 'General' },
+  { id: 'sensitive', label: 'Sensitive' },
+  { id: 'questionable', label: 'Questionable' },
+  { id: 'explicit', label: 'Explicit' },
+]
+
+function useGelbooruCredentials() {
+  const [creds, setCreds] = useState<GelbooruCredentials | null>(readGelbooruCredentials)
+  useEffect(() => {
+    const sync = () => setCreds(readGelbooruCredentials())
+    window.addEventListener(GELBOORU_CHANGED_EVENT, sync)
+    return () => window.removeEventListener(GELBOORU_CHANGED_EVENT, sync)
+  }, [])
+  return creds
+}
 
 interface Props {
   items: MediaItem[]
@@ -91,10 +117,43 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
     staleTime: 30 * 60 * 1000,
     retry: 1,
   })
+  const kitsu = useQuery({
+    queryKey: ['find-images-kitsu', media?.id],
+    queryFn: () => kitsuImages(media!),
+    enabled: !!media,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  })
+  const wallpapers = useInfiniteQuery({
+    queryKey: ['find-images-wallhaven', media?.id, allowAdult],
+    queryFn: ({ pageParam }) => wallhavenImages(media!, !allowAdult, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.lastPage ? last.page + 1 : undefined),
+    enabled: !!media,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  })
+  const gbCreds = useGelbooruCredentials()
+  const [gbRatingChoice, setGbRating] = useState<GelbooruRating | null>(null)
+  const gbRating = allowAdult ? gbRatingChoice : 'general'
+  const gelbooru = useInfiniteQuery({
+    queryKey: ['find-images-gelbooru', media?.id, gbRating, gbCreds?.userId],
+    queryFn: ({ pageParam }) => gelbooruImages(media!, gbCreds!, gbRating, pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.lastPage ? last.page + 1 : undefined),
+    enabled: !!media && !!gbCreds,
+    staleTime: 30 * 60 * 1000,
+    retry: (count, err) => !(err instanceof GelbooruAuthError) && count < 1,
+  })
 
   const shelfItem = useMemo(() => (media ? items.find((i) => anilistId(i) === media.id) : undefined), [items, media])
   const saved = useMemo(() => new Set(panels.map((p) => p.source_url).filter(Boolean) as string[]), [panels])
-  const images = useMemo(() => [...(alImages.data ?? []), ...(mdImages.data ?? [])], [alImages.data, mdImages.data])
+  const wallpaperImages = useMemo(() => wallpapers.data?.pages.flatMap((p) => p.images) ?? [], [wallpapers.data])
+  const gelbooruList = useMemo(() => gelbooru.data?.pages.flatMap((p) => p.images) ?? [], [gelbooru.data])
+  const images = useMemo(
+    () => [...(alImages.data ?? []), ...(mdImages.data ?? []), ...(kitsu.data ?? []), ...wallpaperImages, ...gelbooruList],
+    [alImages.data, mdImages.data, kitsu.data, wallpaperImages, gelbooruList],
+  )
 
   useEffect(() => onBusyChange(upload.isPending), [upload.isPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -195,6 +254,7 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
           tags: img.tags,
           caption: img.caption,
           sourceUrl: img.sourceUrl,
+          adult: img.adult || undefined,
         })),
         onProgress: (done, total) => setProgress({ done, total }),
       },
@@ -218,7 +278,75 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
 
   if (media) {
     const blurred = blurAdult && adult
-    const mdState = media.type !== 'MANGA' ? null : mdImages.isLoading ? 'loading' : mdImages.isError ? 'error' : null
+    const wakeNote = 'the server can take up to a minute to wake up'
+    type Paged = { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown; total: number }
+    const paged = (q: typeof wallpapers | typeof gelbooru): Paged => ({
+      hasNextPage: q.hasNextPage,
+      isFetchingNextPage: q.isFetchingNextPage,
+      fetchNextPage: q.fetchNextPage,
+      total: q.data?.pages[0]?.total ?? 0,
+    })
+    const sections: {
+      group: ImageGroup
+      title: string
+      query: { isLoading: boolean; isError: boolean; isSuccess: boolean; error?: unknown; refetch: () => unknown }
+      loading?: string
+      empty?: string
+      grid: string
+      show: boolean
+      more?: Paged
+      extra?: ReactNode
+    }[] = [
+      { group: 'Cover & banner', title: 'Cover & banner · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
+      { group: 'Characters', title: 'Characters · AniList', query: alImages, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
+      {
+        group: 'Volume covers',
+        title: 'Volume covers · MangaDex',
+        query: mdImages,
+        loading: `Loading volume covers… ${wakeNote}.`,
+        empty: 'MangaDex has no volume covers for this title.',
+        grid: 'grid-cols-3 sm:grid-cols-5',
+        show: media.type === 'MANGA',
+      },
+      { group: 'Kitsu art', title: 'Poster & cover · Kitsu', query: kitsu, grid: 'grid-cols-3 sm:grid-cols-5', show: true },
+      {
+        group: 'Wallpapers',
+        title: 'Wallpapers · Wallhaven',
+        query: wallpapers,
+        loading: `Loading wallpapers… ${wakeNote}.`,
+        empty: 'No wallpapers found on Wallhaven.',
+        grid: 'grid-cols-2 sm:grid-cols-3',
+        show: true,
+        more: paged(wallpapers),
+      },
+      {
+        group: 'Gelbooru',
+        title: 'Gelbooru',
+        query: gelbooru,
+        loading: `Searching Gelbooru… ${wakeNote}.`,
+        empty: gelbooru.data?.pages[0]?.tag
+          ? `Nothing on Gelbooru for this rating (tag: ${gelbooru.data.pages[0].tag}).`
+          : 'Gelbooru has no tag for this title.',
+        grid: 'grid-cols-3 sm:grid-cols-4',
+        show: !!gbCreds,
+        more: paged(gelbooru),
+        extra: allowAdult ? (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {GELBOORU_RATINGS.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => setGbRating(r.id)}
+                className={`chip !px-2.5 !py-0.5 !text-[11px] ${gbRatingChoice === r.id ? 'chip-active' : ''}`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-slate-500 mb-2">Clean mode: general-rated posts only.</p>
+        ),
+      },
+    ]
     return (
       <>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -246,37 +374,42 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
           {alImages.isLoading && <p className="text-sm text-slate-500 animate-pulse">Loading images from AniList…</p>}
           {alImages.isError && <p className="text-sm text-rose-500">Couldn't load AniList images. Try again in a minute.</p>}
 
-          {GROUPS.map((group) => {
+          {sections.map(({ group, title, query, loading, empty, grid, show, more, extra }) => {
+            if (!show) return null
             const list = images.filter((i) => i.group === group)
-            if (group === 'Volume covers' && mdState) {
+            if (!list.length) {
+              let body: ReactNode = null
+              if (query.isLoading && loading) {
+                body = <p className="text-sm text-slate-500 animate-pulse">{loading}</p>
+              } else if (query.isError && group !== 'Characters' && group !== 'Cover & banner') {
+                body = (
+                  <p className="text-sm text-rose-500">
+                    {query.error instanceof GelbooruAuthError ? query.error.message : "Didn't load."}{' '}
+                    <button onClick={() => query.refetch()} className="font-semibold underline">
+                      Try again
+                    </button>
+                  </p>
+                )
+              } else if (query.isSuccess && empty) {
+                body = <p className="text-xs text-slate-500">{empty}</p>
+              }
+              if (!body) return null
               return (
                 <div key={group}>
-                  <span className={label}>Volume covers · MangaDex</span>
-                  {mdState === 'loading' ? (
-                    <p className="text-sm text-slate-500 animate-pulse">Loading volume covers… the server can take up to a minute to wake up.</p>
-                  ) : (
-                    <p className="text-sm text-rose-500">
-                      Volume covers didn't load.{' '}
-                      <button onClick={() => mdImages.refetch()} className="font-semibold underline">
-                        Try again
-                      </button>
-                    </p>
-                  )}
+                  {(loading || extra) && <span className={label}>{title}</span>}
+                  {extra}
+                  {body}
                 </div>
               )
             }
-            if (!list.length) {
-              return group === 'Volume covers' && media.type === 'MANGA' && mdImages.isSuccess ? (
-                <p key={group} className="text-xs text-slate-500">MangaDex has no volume covers for this title.</p>
-              ) : null
-            }
             const pickable = list.filter((i) => !saved.has(i.sourceUrl))
             const allOn = pickable.length > 0 && pickable.every((i) => selected.has(i.sourceUrl))
+            const count = more && more.total > list.length ? `${list.length} of ${more.total}` : list.length
             return (
               <div key={group}>
                 <div className="flex items-center justify-between mb-2">
                   <span className={label + ' !mb-0'}>
-                    {group === 'Volume covers' ? 'Volume covers · MangaDex' : group} ({list.length})
+                    {title} ({count})
                   </span>
                   {pickable.length > 0 && (
                     <button onClick={() => toggleGroup(group)} disabled={busy} className="text-xs font-semibold text-violet-500 hover:underline">
@@ -284,22 +417,43 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {extra}
+                <div className={`grid ${grid} gap-2`}>
                   {list.map((img) => (
                     <ImageTile
                       key={img.sourceUrl}
                       image={img}
                       saved={saved.has(img.sourceUrl)}
                       selected={selected.has(img.sourceUrl)}
-                      blurred={blurred}
+                      blurred={blurred || (blurAdult && !!img.adult)}
                       disabled={busy}
                       onToggle={() => toggle(img.sourceUrl)}
                     />
                   ))}
                 </div>
+                {more?.hasNextPage && (
+                  <button
+                    onClick={() => more.fetchNextPage()}
+                    disabled={more.isFetchingNextPage}
+                    className="chip !px-3 !py-1.5 !text-xs w-full justify-center mt-2"
+                  >
+                    {more.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                  </button>
+                )}
               </div>
             )
           })}
+
+          {gbCreds ? (
+            <button
+              onClick={() => saveGelbooruCredentials(null)}
+              className="text-[11px] font-semibold text-slate-500 hover:text-rose-500"
+            >
+              Disconnect Gelbooru on this device
+            </button>
+          ) : (
+            <GelbooruConnect />
+          )}
 
           {images.length > 0 && (
             <div className="space-y-3 pt-1">
@@ -383,7 +537,8 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
         className="input-premium w-full"
       />
       <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
-        Official covers, banners and character art from AniList, plus volume covers from MangaDex.
+        Covers, banners and character art from AniList, volume covers from MangaDex, posters from Kitsu and wallpapers from
+        Wallhaven.
       </p>
 
       {q.length >= 2 && search.isLoading && <p className="text-sm text-slate-500 animate-pulse">Searching AniList…</p>}
@@ -429,6 +584,57 @@ export function FindImages({ items, isAdultItem, tagSuggestions, initialQuery = 
           <MediaList list={artist.works} items={items} onPick={openMedia} empty="No works to show." />
         </div>
       )}
+    </div>
+  )
+}
+
+function GelbooruConnect() {
+  const [open, setOpen] = useState(false)
+  const [keyText, setKeyText] = useState('')
+  const [userId, setUserId] = useState('')
+  const parsed = parseGelbooruCredentials(keyText, userId)
+  const needsUserId = !!keyText && !/user_id=/.test(keyText)
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="w-full rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-violet-400 p-3 text-left">
+        <p className="text-sm font-semibold">＋ Connect Gelbooru</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Fan art and more, with your own free Gelbooru API key.</p>
+      </button>
+    )
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-white/10 p-3 space-y-2">
+      <p className="text-sm font-semibold">Connect Gelbooru</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        On Gelbooru, open{' '}
+        <a
+          href="https://gelbooru.com/index.php?page=account&s=options"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-violet-500 hover:underline"
+        >
+          Account → Options ↗
+        </a>{' '}
+        and copy the whole <code>&amp;api_key=…&amp;user_id=…</code> line under “API Access Credentials”. It's saved on this device only.
+      </p>
+      <input
+        value={keyText}
+        onChange={(e) => setKeyText(e.target.value)}
+        placeholder="&api_key=…&user_id=…"
+        className="input-premium !py-2 text-sm font-mono"
+      />
+      {needsUserId && (
+        <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID (number)" className="input-premium !py-2 text-sm" />
+      )}
+      <div className="flex gap-2">
+        <button onClick={() => parsed && saveGelbooruCredentials(parsed)} disabled={!parsed} className="btn-glow !px-4 !py-1.5 text-sm">
+          Save
+        </button>
+        <button onClick={() => setOpen(false)} className="chip !px-3 !py-1.5 !text-xs">
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }
@@ -491,7 +697,7 @@ function ImageTile({
       onClick={onToggle}
       disabled={saved || disabled}
       title={image.label}
-      className={`group relative rounded-lg overflow-hidden bg-black/20 text-left ${image.wide ? 'col-span-3 sm:col-span-5 aspect-[4/1]' : 'aspect-[2/3]'} ${
+      className={`group relative rounded-lg overflow-hidden bg-black/20 text-left ${image.wide ? 'col-span-3 sm:col-span-5 aspect-[4/1]' : image.landscape ? 'aspect-video' : 'aspect-[2/3]'} ${
         selected ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-transparent' : ''
       } ${saved ? 'opacity-50 cursor-default' : ''}`}
     >

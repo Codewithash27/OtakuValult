@@ -46,6 +46,7 @@ export interface UploadEntry {
   tags?: string[]
   caption?: string | null
   sourceUrl?: string | null
+  adult?: boolean
 }
 
 function uploadError(err: unknown) {
@@ -90,7 +91,7 @@ export function useUploadPanels() {
             kind: entry.kind ?? opts.kind,
             width: img.width,
             height: img.height,
-            adult: opts.adult,
+            adult: entry.adult ?? opts.adult,
             tags,
             ...(entry.caption ? { caption: entry.caption } : {}),
             ...(entry.sourceUrl ? { source_url: entry.sourceUrl } : {}),

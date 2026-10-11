@@ -32,7 +32,7 @@ export interface FoundArtist {
   works: FoundMedia[]
 }
 
-export type ImageGroup = 'Cover & banner' | 'Characters' | 'Volume covers'
+export type ImageGroup = 'Cover & banner' | 'Characters' | 'Volume covers' | 'Kitsu art' | 'Wallpapers' | 'Gelbooru'
 
 export interface FoundImage {
   /** Original image address; stored on the saved panel to spot duplicates. */
@@ -44,7 +44,14 @@ export interface FoundImage {
   kind: PanelKind
   tags: string[]
   caption: string | null
+  /** Banner-shaped (about 4:1), shown full width. */
   wide?: boolean
+  /** Wallpaper-shaped (16:9). */
+  landscape?: boolean
+  /** This image itself is 18+, regardless of the title. */
+  adult?: boolean
+  /** Smaller copy to download when the original fails (e.g. too large for the proxy). */
+  fallbackDownload?: string
 }
 
 interface RawMedia {
@@ -220,6 +227,173 @@ export async function mangaDexImages(media: FoundMedia): Promise<FoundImage[]> {
   })
 }
 
+interface KitsuResponse {
+  kitsu_id: string | null
+  age_rating: string | null
+  images: { kind: 'poster' | 'cover'; full_url: string; thumb_url: string }[]
+}
+
+/** Kitsu's poster and wide cover; Kitsu images have no CORS, so downloads go through the backend. */
+export async function kitsuImages(media: FoundMedia): Promise<FoundImage[]> {
+  const kind = media.type === 'ANIME' ? 'anime' : 'manga'
+  const data = await apiFetch<KitsuResponse>(`/api/images/kitsu?anilist_id=${media.id}&kind=${kind}`)
+  return data.images.map((img) => ({
+    sourceUrl: img.full_url,
+    thumb: img.thumb_url,
+    download: proxied(img.full_url),
+    group: 'Kitsu art' as const,
+    label: img.kind === 'poster' ? 'Kitsu poster' : 'Kitsu cover',
+    kind: 'art' as const,
+    tags: img.kind === 'poster' ? ['cover'] : ['banner', 'wallpaper'],
+    caption: null,
+    wide: img.kind === 'cover',
+  }))
+}
+
+interface WallhavenResponse {
+  query: string | null
+  page: number
+  last_page: number
+  total: number
+  wallpapers: {
+    id: string
+    purity: 'sfw' | 'sketchy'
+    resolution: string | null
+    full_url: string
+    thumb_url: string
+    page_url: string | null
+    source: string | null
+  }[]
+}
+
+export interface WallpaperPage {
+  images: FoundImage[]
+  page: number
+  lastPage: number
+  total: number
+}
+
+function isLandscape(resolution: string | null) {
+  const [w, h] = (resolution ?? '').split('x').map(Number)
+  return !(w && h) || w >= h
+}
+
+/** Anime wallpapers from Wallhaven: SFW only in clean mode, SFW + "sketchy" otherwise. Never NSFW. */
+export async function wallhavenImages(media: FoundMedia, sfwOnly: boolean, page: number): Promise<WallpaperPage> {
+  const params = new URLSearchParams({ sfw_only: String(sfwOnly), page: String(page) })
+  media.titles.slice(0, 3).forEach((t) => params.append('title', t))
+  const data = await apiFetch<WallhavenResponse>(`/api/images/wallhaven?${params}`)
+  return {
+    page: data.page,
+    lastPage: data.last_page,
+    total: data.total,
+    images: data.wallpapers.map((w) => ({
+      sourceUrl: w.full_url,
+      thumb: w.thumb_url,
+      download: w.full_url,
+      group: 'Wallpapers' as const,
+      label: w.resolution ? `Wallpaper ${w.resolution}` : 'Wallpaper',
+      kind: 'art' as const,
+      tags: w.purity === 'sketchy' ? ['wallpaper', 'sketchy'] : ['wallpaper'],
+      caption: w.source ? `Wallpaper · source: ${w.source}` : w.page_url ? `Wallpaper · ${w.page_url}` : 'Wallpaper',
+      landscape: isLandscape(w.resolution),
+    })),
+  }
+}
+
+export interface GelbooruCredentials {
+  userId: string
+  apiKey: string
+}
+
+export type GelbooruRating = 'general' | 'sensitive' | 'questionable' | 'explicit'
+
+const GELBOORU_KEY = 'gelbooru-credentials'
+export const GELBOORU_CHANGED_EVENT = 'gelbooru-credentials-changed'
+
+/** Kept on this device only; the key is sent to the backend per request and never stored there. */
+export function readGelbooruCredentials(): GelbooruCredentials | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(GELBOORU_KEY) || 'null')
+    return value?.userId && value?.apiKey ? value : null
+  } catch {
+    return null
+  }
+}
+
+export function saveGelbooruCredentials(creds: GelbooruCredentials | null) {
+  if (creds) localStorage.setItem(GELBOORU_KEY, JSON.stringify(creds))
+  else localStorage.removeItem(GELBOORU_KEY)
+  window.dispatchEvent(new Event(GELBOORU_CHANGED_EVENT))
+}
+
+/** Accepts the "&api_key=…&user_id=…" line from Gelbooru's options page, or the two values separately. */
+export function parseGelbooruCredentials(text: string, userId = ''): GelbooruCredentials | null {
+  const key = /api_key=([0-9a-f]+)/i.exec(text)?.[1] ?? (/^[0-9a-f]{20,}$/i.test(text.trim()) ? text.trim() : null)
+  const user = /user_id=(\d+)/.exec(text)?.[1] ?? (/^\d+$/.test(userId.trim()) ? userId.trim() : null)
+  return key && user ? { userId: user, apiKey: key } : null
+}
+
+interface GelbooruResponse {
+  tag: string | null
+  total: number
+  page: number
+  posts: {
+    id: number
+    rating: GelbooruRating
+    width: number | null
+    height: number | null
+    file_url: string
+    sample_url: string | null
+    thumb_url: string
+    source: string | null
+  }[]
+}
+
+export const GELBOORU_PAGE_SIZE = 40
+
+export class GelbooruAuthError extends Error {}
+
+/** Posts for a title's Gelbooru series tag; previews and downloads go through the backend. */
+export async function gelbooruImages(
+  media: FoundMedia,
+  creds: GelbooruCredentials,
+  rating: GelbooruRating | null,
+  page: number,
+): Promise<WallpaperPage & { tag: string | null }> {
+  const params = new URLSearchParams({ page: String(page) })
+  if (rating) params.set('rating', rating)
+  media.titles.slice(0, 3).forEach((t) => params.append('title', t))
+  const res = await fetch(`${getApiBase()}/api/images/gelbooru?${params}`, {
+    headers: { 'X-Gelbooru-User': creds.userId, 'X-Gelbooru-Key': creds.apiKey },
+  })
+  if (res.status === 401) throw new GelbooruAuthError('Gelbooru rejected your user ID or API key')
+  if (!res.ok) throw new Error(`Gelbooru search failed (${res.status})`)
+  const data = (await res.json()) as GelbooruResponse
+  return {
+    tag: data.tag,
+    page: data.page,
+    lastPage: Math.ceil(data.total / GELBOORU_PAGE_SIZE),
+    total: data.total,
+    images: data.posts.map((p) => {
+      const adult = p.rating === 'questionable' || p.rating === 'explicit'
+      return {
+        sourceUrl: p.file_url,
+        thumb: proxied(p.thumb_url),
+        download: proxied(p.file_url),
+        group: 'Gelbooru' as const,
+        label: `#${p.id} · ${p.rating}`,
+        kind: 'art' as const,
+        tags: ['gelbooru', p.rating],
+        caption: p.source || `https://gelbooru.com/index.php?page=post&s=view&id=${p.id}`,
+        landscape: !!(p.width && p.height && p.width > p.height),
+        adult,
+        fallbackDownload: p.sample_url ? proxied(p.sample_url) : undefined,
+      }
+    }),
+  }
+}
+
 async function fetchImage(url: string) {
   // The preview <img> caches a copy without CORS headers; reusing it makes fetch fail.
   try {
@@ -231,7 +405,8 @@ async function fetchImage(url: string) {
 }
 
 export async function downloadImage(image: FoundImage, baseName: string): Promise<File> {
-  const res = await fetchImage(image.download)
+  let res = await fetchImage(image.download)
+  if (!res.ok && image.fallbackDownload) res = await fetchImage(image.fallbackDownload)
   if (!res.ok) throw new Error(`download failed (${res.status})`)
   const blob = await res.blob()
   if (!blob.type.startsWith('image/')) throw new Error('not an image')

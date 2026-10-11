@@ -4,14 +4,11 @@ from typing import Optional
 import httpx
 
 from app.services.cache import Cache
+from app.services.image_proxy import HEADERS
 
 API = "https://api.mangadex.org"
 UPLOADS = "https://uploads.mangadex.org"
-# MangaDex rejects requests without an identifying User-Agent.
-HEADERS = {"User-Agent": "OtakuVault/0.1 (personal catalogue)"}
 RATINGS = ["safe", "suggestive", "erotica", "pornographic"]
-COVER_PATH = re.compile(r"^/covers/[0-9a-f-]{36}/[\w.-]+$")
-MAX_IMAGE_BYTES = 15 * 1024 * 1024
 
 _covers_cache = Cache(ttl=6 * 60 * 60, max_size=300)
 
@@ -96,29 +93,3 @@ async def mangadex_covers(anilist_id: int, titles: list[str]) -> dict:
     _covers_cache.set(key, result)
     return result
 
-
-ANILIST_PATH = re.compile(r"^/file/anilistcdn/[\w/.-]+$")
-
-
-def is_cover_url(url: str) -> bool:
-    parsed = httpx.URL(url)
-    if parsed.scheme != "https":
-        return False
-    if parsed.host == "uploads.mangadex.org":
-        return bool(COVER_PATH.match(parsed.path))
-    return parsed.host == "s4.anilist.co" and bool(ANILIST_PATH.match(parsed.path))
-
-
-async def fetch_cover(url: str) -> tuple[bytes, str]:
-    async with httpx.AsyncClient(timeout=20.0, headers=HEADERS, follow_redirects=False) as client:
-        async with client.stream("GET", url) as res:
-            res.raise_for_status()
-            content_type = res.headers.get("content-type", "")
-            if not content_type.startswith("image/"):
-                raise ValueError("Not an image")
-            data = bytearray()
-            async for chunk in res.aiter_bytes():
-                data.extend(chunk)
-                if len(data) > MAX_IMAGE_BYTES:
-                    raise ValueError("Image too large")
-            return bytes(data), content_type

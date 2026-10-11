@@ -6,6 +6,7 @@ import { useSession } from '../hooks/useSession'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { setAdultOverrides, useContentMode } from '../hooks/useAdultFilter'
 import { MediaMeta, primeMeta } from '../lib/anilistMeta'
+import { THEMES, hasTheme } from '../lib/themes'
 import { useToast } from '../components/Toast'
 import { PosterImage } from '../components/PosterImage'
 import { StatusBadge } from '../components/StatusBadge'
@@ -16,6 +17,7 @@ type Source = 'anilist' | 'mal' | 'paste'
 type Mode = 'skip' | 'update'
 type Phase = 'pick' | 'loading' | 'preview' | 'saving' | 'done'
 type PasteType = 'MANGA' | 'ANIME' | 'BOTH'
+type TypeFilter = 'all' | 'manhwa' | 'manga' | 'anime'
 
 interface Row extends ImportEntry {
   existing: MediaItem | null
@@ -62,6 +64,8 @@ export default function Import() {
   const [includeAdult, setIncludeAdult] = useState(contentMode === 'creamy')
   const [hideSameSex, setHideSameSex] = useState(false)
   const [visible, setVisible] = useState(PREVIEW_STEP)
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [themeFilter, setThemeFilter] = useState<string[]>([])
   const [saved, setSaved] = useState(0)
   const [result, setResult] = useState({ added: 0, updated: 0, skipped: 0 })
 
@@ -81,6 +85,26 @@ export default function Import() {
     (includeAdult || !r.adult) && !(hideSameSex && r.sameSex) && (isNew(r) || (mode === 'update' && !!r.existing))
   const chosen = rows.filter((r) => selected.has(r.key) && importable(r))
 
+  const typeRows = useMemo(
+    () => (typeFilter === 'all' ? rows : rows.filter((r) => r.media_type === typeFilter)),
+    [rows, typeFilter]
+  )
+  const themeCounts = useMemo(
+    () =>
+      THEMES.map((theme) => ({ theme, count: typeRows.filter((r) => hasTheme(r.tags, theme)).length })).filter((t) => t.count > 0),
+    [typeRows]
+  )
+  const listRows = useMemo(
+    () => typeRows.filter((r) => THEMES.every((t) => !themeFilter.includes(t.id) || hasTheme(r.tags, t))),
+    [typeRows, themeFilter]
+  )
+  const filtering = typeFilter !== 'all' || themeFilter.length > 0
+
+  const toggleTheme = (id: string) => {
+    setVisible(PREVIEW_STEP)
+    setThemeFilter((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]))
+  }
+
   const counts = {
     total: rows.length,
     fresh: rows.filter(isNew).length,
@@ -96,6 +120,8 @@ export default function Import() {
     if (!list.length) throw new Error('That list is empty. Nothing to import.')
     setEntries(list)
     setVisible(PREVIEW_STEP)
+    setTypeFilter('all')
+    setThemeFilter([])
     setSelected(new Set(list.map((e) => e.key)))
     setPhase('preview')
   }
@@ -499,8 +525,91 @@ export default function Import() {
             )}
           </div>
 
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-3 space-y-2.5 bg-white/40 dark:bg-white/[0.02]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mr-1">Show</span>
+              {(['all', 'manhwa', 'manga', 'anime'] as const).map((t) => {
+                const n = t === 'all' ? rows.length : rows.filter((r) => r.media_type === t).length
+                if (t !== 'all' && n === 0) return null
+                return (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setTypeFilter(t)
+                      setVisible(PREVIEW_STEP)
+                    }}
+                    disabled={phase === 'saving'}
+                    className={`chip !px-3 !py-1 !text-xs ${typeFilter === t ? 'chip-active !scale-100' : ''}`}
+                  >
+                    {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)} <span className="opacity-70">{n}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {themeCounts.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mr-1 shrink-0">
+                  Themes
+                </span>
+                {themeCounts.map(({ theme, count }) => {
+                  const on = themeFilter.includes(theme.id)
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => toggleTheme(theme.id)}
+                      disabled={phase === 'saving'}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 border transition-all ${
+                        on
+                          ? 'text-white border-transparent bg-gradient-to-r from-rose-500 to-fuchsia-600'
+                          : 'border-slate-200 bg-white/60 text-slate-600 hover:border-rose-400 hover:text-rose-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300'
+                      }`}
+                    >
+                      {theme.label} <span className="opacity-70">{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {filtering && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-slate-500 dark:text-slate-400">
+                  Showing <b className="text-slate-700 dark:text-slate-200">{listRows.length}</b> of {rows.length}
+                </span>
+                <button
+                  onClick={() => {
+                    if (listRows.some((r) => r.adult)) setIncludeAdult(true)
+                    setSelected(new Set(listRows.map((r) => r.key)))
+                  }}
+                  disabled={phase === 'saving' || !listRows.length}
+                  className="btn-glow !py-1 !px-3 !text-xs"
+                >
+                  Select only these {listRows.length}
+                </button>
+                <button
+                  onClick={() => setSelected((prev) => new Set([...prev, ...listRows.map((r) => r.key)]))}
+                  disabled={phase === 'saving' || !listRows.length}
+                  className="chip !px-3 !py-1 !text-xs"
+                >
+                  + Add these to selection
+                </button>
+                <button
+                  onClick={() => {
+                    setTypeFilter('all')
+                    setThemeFilter([])
+                  }}
+                  className="font-semibold text-rose-500 hover:underline"
+                >
+                  ✕ Clear filter
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="max-h-[52vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/10 divide-y divide-slate-200 dark:divide-white/5">
-            {rows.slice(0, visible).map((r) => {
+            {listRows.length === 0 && (
+              <p className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">No titles match this filter.</p>
+            )}
+            {listRows.slice(0, visible).map((r) => {
               const can = importable(r)
               const alternatives = r.alternatives ?? []
               return (
@@ -549,6 +658,24 @@ export default function Import() {
                         {r.query && r.query.toLowerCase() !== r.title.toLowerCase() && r.source !== 'manual' ? ` · for "${r.query}"` : ''}
                       </p>
                     )}
+                    {r.tags.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {THEMES.filter((t) => hasTheme(r.tags, t))
+                          .slice(0, 4)
+                          .map((t) => (
+                            <span
+                              key={t.id}
+                              className={`text-[10px] font-semibold px-1.5 py-px rounded ${
+                                themeFilter.includes(t.id)
+                                  ? 'bg-rose-500/25 text-rose-600 dark:text-rose-300'
+                                  : 'bg-violet-500/10 text-violet-600 dark:text-violet-300'
+                              }`}
+                            >
+                              {t.label}
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                   {r.source === 'manual' && phase !== 'saving' && (
                     <button
@@ -575,12 +702,12 @@ export default function Import() {
                 </div>
               )
             })}
-            {rows.length > visible && (
+            {listRows.length > visible && (
               <button
                 onClick={() => setVisible((v) => v + PREVIEW_STEP)}
                 className="w-full p-3 text-sm font-semibold text-violet-500 hover:bg-violet-500/5"
               >
-                Show more ({rows.length - visible} not shown · they're still included in the import)
+                Show more ({listRows.length - visible} not shown · selected ones are still imported)
               </button>
             )}
           </div>

@@ -118,7 +118,10 @@ function ManhwaTopList() {
     queryKey: ['pornhwadb-status'],
     queryFn: pornhwadbStatus,
     enabled: isBackendConfigured(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => (query.state.data?.configured === false ? 8_000 : false),
   })
 
   const tagCounts = useQuery({

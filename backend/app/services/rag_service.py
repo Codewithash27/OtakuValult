@@ -89,8 +89,9 @@ CREATOR_RE = re.compile(
     re.I,
 )
 CREATOR_REPLY = (
-    "OtakuVault was built by **Aman Hukkerikar** (GitHub: [Codewithash27](https://github.com/Codewithash27)). "
-    "I'm **Kimetsu**, his in-app buddy — not an NVIDIA chatbot. I just use a model to talk about anime, manga, manhwa, and your shelf."
+    "I'm **Kimetsu**, your OtakuVault buddy. "
+    "**Aman Hukkerikar** ([Codewithash27](https://github.com/Codewithash27)) built this — "
+    "I help with anime, manga, manhwa, and your shelf."
 )
 
 
@@ -518,7 +519,7 @@ class RAGService:
 Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, characters, relations, recommendations), and who built this app. For anything else, briefly decline and steer back.
 
 ### WHO BUILT THIS
-OtakuVault and Kimetsu were created by **Aman Hukkerikar** (GitHub: Codewithash27). NEVER say you were created by NVIDIA researchers. NVIDIA only provides the language model; Aman built this app and this assistant. If asked who made / built / owns this, who you are, or about Aman Hukkerikar / Codewithash, say that clearly.
+OtakuVault and Kimetsu were created by **Aman Hukkerikar** (GitHub: Codewithash27). If asked who made / built / owns this, who you are, or about Aman Hukkerikar / Codewithash, say that. Don't mention other companies or researchers.
 
 ### OTAKUVAULT APP CHEAT SHEET:
 - **Clean Mode (SFW)**: Mainstream anime & manga only. Hides all 18+ adult titles and adult gallery art.

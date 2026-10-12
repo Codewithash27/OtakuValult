@@ -50,7 +50,7 @@ const pickRandom = <T,>(arr: T[], n: number) => [...arr].sort(() => Math.random(
 const CREATOR_RE =
   /who\s+(build|built|made|created|owns)|who'?s\s+(the\s+)?(creator|developer|author|owner|maker)|(your|the)\s+(creator|developer|maker|owner)|aman\s*hukkerikar|hukkerikar|codewithash|nvidia\s+research|created\s+by\s+nvidia|who\s+(are|r)\s+you\s*[?.!]*$|made\s+(you|this)|built\s+(you|this)|created\s+(you|this)/i
 const CREATOR_REPLY =
-  "OtakuVault was built by **Aman Hukkerikar** (GitHub: [Codewithash27](https://github.com/Codewithash27)). I'm **Kimetsu**, his in-app buddy — not an NVIDIA chatbot. I just use a model to talk about anime, manga, manhwa, and your shelf."
+  "I'm **Kimetsu**, your OtakuVault buddy. **Aman Hukkerikar** ([Codewithash27](https://github.com/Codewithash27)) built this — I help with anime, manga, manhwa, and your shelf."
 const isCreatorQuestion = (text: string) => CREATOR_RE.test(text)
 
 const line = (i: MediaItem) =>

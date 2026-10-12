@@ -216,6 +216,14 @@
 
   /* ---- Vault page ---- */
   .vault-hero { isolation: isolate; }
+  .vault-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 0% 50%, rgb(249 138 7 / .16), transparent 46%),
+      radial-gradient(ellipse at 100% 0%, rgb(7 196 168 / .1), transparent 42%);
+    pointer-events: none;
+  }
   .vault-hero::after {
     content: '';
     position: absolute; inset: 0;
@@ -229,6 +237,16 @@
     animation: spinBorder 7s linear infinite;
     pointer-events: none;
   }
+  .vault-orb {
+    position: absolute;
+    width: 16rem; height: 16rem;
+    border-radius: 999px;
+    filter: blur(64px);
+    pointer-events: none;
+    animation: float 9s ease-in-out infinite;
+  }
+  .vault-orb-a { top: -6rem; left: -2.5rem; background: rgb(249 138 7 / .28); }
+  .vault-orb-b { bottom: -7rem; right: 22%; background: rgb(7 196 168 / .18); animation-delay: -3s; }
   .vault-kanji {
     color: transparent;
     -webkit-text-stroke: 1px rgb(255 162 31 / .16);
@@ -236,7 +254,19 @@
   }
   html:not(.dark) .vault-kanji { -webkit-text-stroke-color: rgb(221 102 2 / .18); }
 
-  .vault-toolbar { box-shadow: 0 12px 30px -18px rgb(0 0 0 / .8); }
+  .stat-live { color: #07c4a8; }
+  .cinema-btn {
+    @apply inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300;
+    border: 1px solid rgb(7 196 168 / .4);
+    background: rgb(7 196 168 / .12);
+    color: #92fee4;
+    box-shadow: 0 0 16px rgb(7 196 168 / .28);
+  }
+  .cinema-btn:hover { transform: translateY(-1px); box-shadow: 0 0 22px rgb(7 196 168 / .5); }
+
+  .vault-toolbar {
+    box-shadow: 0 12px 30px -18px rgb(0 0 0 / .8), inset 0 1px 0 rgb(255 162 31 / .08);
+  }
 
   .seg {
     @apply flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-900/[0.05] dark:bg-black/30 border border-slate-200 dark:border-white/5;
@@ -619,8 +649,41 @@ html[data-mode='creamy'] .wall-poster:hover { animation: heartbeat 1.6s ease-in-
   45% { box-shadow: 0 25px 66px -14px rgb(240 165 11 / .6); }
 }
 html[data-mode='creamy'] .card-ring::before { background: linear-gradient(135deg, transparent, rgb(240 165 11 / .85), rgb(226 52 52 / .85), transparent); }
+html[data-mode='creamy'] .vault-hero {
+  box-shadow: 0 20px 50px -24px rgb(226 52 52 / .45), inset 0 1px 0 rgb(252 211 77 / .12);
+}
+html[data-mode='creamy'] .vault-hero::before {
+  background:
+    radial-gradient(ellipse at 0% 40%, rgb(226 52 52 / .28), transparent 48%),
+    radial-gradient(ellipse at 90% 80%, rgb(240 165 11 / .16), transparent 44%);
+}
 html[data-mode='creamy'] .vault-hero::after { background: conic-gradient(from var(--spin, 0deg), transparent 0 70%, #fcd34d 80%, #e23434 88%, transparent 96%); }
-html[data-mode='creamy'] .vault-kanji { -webkit-text-stroke-color: rgb(240 165 11 / .16); }
+html[data-mode='creamy'] .vault-orb-a { background: rgb(226 52 52 / .42); }
+html[data-mode='creamy'] .vault-orb-b { background: rgb(240 165 11 / .28); }
+html[data-mode='creamy'] .vault-kanji { -webkit-text-stroke-color: rgb(240 165 11 / .28); }
+html[data-mode='creamy'] .stat-live { color: #fcd34d; text-shadow: 0 0 12px rgb(240 165 11 / .45); }
+html[data-mode='creamy'] .cinema-btn {
+  border-color: rgb(240 165 11 / .45);
+  background: rgb(226 52 52 / .18);
+  color: #fde68a;
+  box-shadow: 0 0 18px rgb(226 52 52 / .4);
+}
+html[data-mode='creamy'] .cinema-btn:hover { box-shadow: 0 0 26px rgb(240 165 11 / .55); }
+html[data-mode='creamy'] .vault-toolbar {
+  border-color: rgb(226 52 52 / .18);
+  box-shadow: 0 12px 36px -18px rgb(226 52 52 / .45), inset 0 1px 0 rgb(252 211 77 / .12);
+}
+html[data-mode='creamy'] .chip {
+  border-color: rgb(226 52 52 / .22);
+  background: rgb(128 31 68 / .28);
+  color: #f8d4c8;
+}
+html[data-mode='creamy'] .chip:hover {
+  color: #fff;
+  box-shadow: 0 0 14px rgb(226 52 52 / .28);
+}
+html[data-mode='creamy'] #ring stop:first-child { stop-color: #fcd34d; }
+html[data-mode='creamy'] #ring stop:last-child { stop-color: #e23434; }
 html[data-mode='creamy'] .reel-poster,
 html[data-mode='creamy'] .premiere-poster { box-shadow: 0 40px 90px -25px #000, 0 0 70px -15px rgb(226 52 52 / .6); }
 html[data-mode='creamy'] .premiere-flash {

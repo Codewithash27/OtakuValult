@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
@@ -9,11 +9,10 @@ import { InstallAppButton } from './InstallAppButton'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { ModeEffects, triggerPanic } from './ModeEffects'
 
-const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean; creamyOnly?: boolean }[] = [
+const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean; creamyOnly?: boolean; cleanOnly?: boolean }[] = [
   { label: 'Library', icon: '📚', href: '/' },
-  { label: 'Anime', icon: '⛩️', href: '/anime' },
-  { label: 'Manga', icon: '📖', href: '/manga' },
-  { label: 'Manhwa', icon: '✨', href: '/manhwa' },
+  { label: 'Anime', icon: '⛩️', href: '/anime', cleanOnly: true },
+  { label: 'Manhwa', icon: '✨', href: '/manhwa', creamyOnly: true },
   { label: 'Gallery', icon: '🖼️', href: '/gallery' },
   { label: 'Top rated', icon: '⭐', href: '/community-lists', creamyOnly: true },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
@@ -60,7 +59,9 @@ function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
   const from = (location.state as { from?: string } | null)?.from
   const pathname = from && /^\/(title|community-lists\/series)\//.test(location.pathname) ? from : location.pathname
   const [contentMode] = useContentMode()
-  const items = NAV_ITEMS.filter((item) => !item.creamyOnly || contentMode === 'creamy')
+  const items = NAV_ITEMS.filter(
+    (item) => (!item.creamyOnly || contentMode === 'creamy') && (!item.cleanOnly || contentMode === 'clean')
+  )
 
   return (
     <nav className="space-y-1.5">
@@ -113,8 +114,19 @@ export function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const isDetailPage = pathname.startsWith('/title/') || pathname.startsWith('/community-lists/series/')
-  const [contentMode] = useContentMode()
-  const navVisible = NAV_ITEMS.filter((item) => !item.disabled && (!item.creamyOnly || contentMode === 'creamy'))
+  const [contentMode, setContentMode] = useContentMode()
+
+  useEffect(() => {
+    if (pathname === '/manga' || (contentMode === 'clean' && (pathname === '/manhwa' || pathname.startsWith('/community-lists')))) {
+      navigate('/', { replace: true })
+    } else if (contentMode === 'creamy' && pathname === '/anime') {
+      navigate('/', { replace: true })
+    }
+  }, [contentMode, pathname, navigate])
+
+  const navVisible = NAV_ITEMS.filter(
+    (item) => !item.disabled && (!item.creamyOnly || contentMode === 'creamy') && (!item.cleanOnly || contentMode === 'clean')
+  )
 
   const handleLogout = async () => {
     await signOut()
@@ -151,6 +163,15 @@ export function AppShell() {
           <div className="flex items-center justify-between gap-4">
             <Logo />
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
+                className={`mode-pill !h-8 shrink-0 ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
+                title={contentMode === 'creamy' ? 'Switch to Clean' : 'Switch to Creamy'}
+              >
+                <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
+                <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
+              </button>
               <button onClick={handleAddItem} className="btn-glow !px-3 !py-1.5 text-sm" aria-label="Add item">
                 + Add
               </button>
@@ -231,7 +252,20 @@ export function AppShell() {
               <span className="font-jp text-lantern-500/80 mr-1">{GREETING_JP}</span>
               {greeting}
             </span>
-            <button onClick={handleAddItem} className="group btn-glow !rounded-full !h-10 !py-0 !px-5 text-sm shrink-0 ml-auto xl:ml-0">
+            <button
+              type="button"
+              onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
+              className={`mode-pill shrink-0 ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
+              title={
+                contentMode === 'creamy'
+                  ? 'Creamy: adult manhwa — tap for Clean (anime)'
+                  : 'Clean: anime shelf — tap for Creamy (manhwa)'
+              }
+            >
+              <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
+              <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
+            </button>
+            <button onClick={handleAddItem} className="group btn-glow !rounded-full !h-10 !py-0 !px-5 text-sm shrink-0">
               <span className="text-lg leading-none transition-transform duration-300 group-hover:rotate-90">+</span> Add item
             </button>
           </div>

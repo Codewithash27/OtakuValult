@@ -31,10 +31,10 @@ const HERO_KANJI: Partial<Record<MediaType | 'all', string>> = {
 }
 
 const HERO: Record<MediaType | 'all', { title: string; blurb: string }> = {
-  all: { title: 'Vault', blurb: 'Every anime, manga and manhwa you love, in one place.' },
+  all: { title: 'Vault', blurb: 'Your shelf, in one place.' },
   anime: { title: 'Anime', blurb: 'Everything you watch, from airing seasons to all-time classics.' },
   manga: { title: 'Manga', blurb: 'Your reading shelf, chapter by chapter.' },
-  manhwa: { title: 'Manhwa', blurb: 'Your webtoons and manhwa, sorted by the themes you like.' },
+  manhwa: { title: 'Manhwa', blurb: 'After Dark — adult manhwa, sorted by the themes you like.' },
   movie: { title: 'Vault', blurb: '' },
   tv: { title: 'Vault', blurb: '' },
 }
@@ -73,11 +73,18 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
   const metaOf = useItemMeta(allItems)
   const tagsOf = useCallback((i: MediaItem) => metaOf(i)?.t, [metaOf])
   const [byTheme, setByTheme] = useState(false)
-  const items = useMemo(
-    () => (contentMode === 'clean' ? allItems.filter((i) => !isAdult(i)) : allItems),
-    [allItems, contentMode, isAdult]
-  )
-  const hiddenCount = allItems.length - items.length
+  const items = useMemo(() => {
+    if (fixedType) {
+      const typed = allItems.filter((i) => i.media_type === fixedType)
+      return contentMode === 'clean' ? typed.filter((i) => !isAdult(i)) : typed
+    }
+    return contentMode === 'clean'
+      ? allItems.filter((i) => i.media_type === 'anime')
+      : allItems.filter((i) => i.media_type === 'manhwa')
+  }, [allItems, contentMode, isAdult, fixedType])
+  const hiddenCount = allItems.filter((i) =>
+    contentMode === 'clean' ? i.media_type === 'manhwa' : i.media_type === 'anime'
+  ).length
 
   useEffect(() => {
     const handleOpenAddModal = () => setShowAddModal(true)
@@ -86,7 +93,8 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
   }, [])
 
   // Parse URL params
-  const mediaType = fixedType ?? ((searchParams.get('type') as MediaType | null) || 'all')
+  const mediaType = fixedType ?? (contentMode === 'clean' ? 'anime' : 'manhwa')
+  const manhwaShelf = mediaType === 'manhwa'
   const selectedThemes = splitParam(searchParams.get('themes'))
   const selectedTags = splitParam(searchParams.get('tags'))
   const themesKey = searchParams.get('themes') || ''
@@ -106,14 +114,23 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
 
   const selectedItem = allItems.find((i) => i.id === itemId) || null
 
-  const typeItems = useMemo(
-    () => (mediaType === 'all' ? items : items.filter((i) => i.media_type === mediaType)),
-    [items, mediaType]
-  )
+  const typeItems = items
 
   const pendingTags = useMemo(
-    () => (fixedType ? typeItems.filter((i) => i.source === 'anilist' && !tagsOf(i)).length : 0),
-    [fixedType, typeItems, tagsOf]
+    () => (manhwaShelf ? typeItems.filter((i) => i.source === 'anilist' && !tagsOf(i)).length : 0),
+    [manhwaShelf, typeItems, tagsOf]
+  )
+
+  const themeRail = useMemo(
+    () =>
+      THEMES.map((theme) => ({
+        id: theme.id,
+        label: theme.label,
+        count: typeItems.filter((i) => hasTheme(tagsOf(i), theme)).length,
+      }))
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count),
+    [typeItems, tagsOf]
   )
 
   // Filter items
@@ -253,6 +270,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
 
   const handleView = (v: VaultView) => {
     if (v === 'themes') {
+      if (!manhwaShelf) return
       setByTheme(true)
       return
     }
@@ -262,9 +280,6 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
   }
 
   const pills = [
-    ...(!fixedType && mediaType !== 'all'
-      ? [{ key: 'type', label: mediaType, onRemove: () => handleMediaTypeChange('all') }]
-      : []),
     ...(status !== 'all'
       ? [{ key: 'status', label: STATUS_LABELS[status as Status], onRemove: () => handleStatusChange('all') }]
       : []),
@@ -301,7 +316,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
           onMediaType={handleMediaTypeChange}
           sort={sort}
           onSort={setSort}
-          view={byTheme && fixedType ? 'themes' : view}
+          view={byTheme && manhwaShelf ? 'themes' : view}
           onView={handleView}
           contentMode={contentMode}
           onContentMode={setContentMode}
@@ -309,12 +324,16 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
           themesOpen={themesOpen}
           onToggleThemes={() => setThemesOpen((o) => !o)}
           themeCount={selectedThemes.length + selectedTags.length}
+          showThemes={manhwaShelf}
+          themeRail={themeRail}
+          selectedThemes={selectedThemes}
+          onToggleTheme={(id) => toggleListParam('themes', id)}
           pills={pills}
           onClearAll={handleClearFilters}
           onCinema={() => setShowWall(true)}
           cinemaDisabled={!sorted.length}
         >
-          {fixedType && themesOpen && typeItems.length > 0 && (
+          {manhwaShelf && themesOpen && typeItems.length > 0 && (
             <ThemeFilter
               items={typeItems}
               tagsOf={tagsOf}
@@ -333,12 +352,12 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
             tagsOf={tagsOf}
             onOpen={openItem}
             onPremiere={(item) => setPremiere({ startId: item.id })}
-            afterDark={contentMode === 'creamy' && (mediaType === 'all' || mediaType === 'manhwa')}
+            afterDark={contentMode === 'creamy'}
           />
         )}
 
         {/* Items */}
-        {byTheme && fixedType && !themesKey && !tagsKey ? (
+        {byTheme && manhwaShelf && !themesKey && !tagsKey ? (
           <ThemeRows
             items={filtered}
             tagsOf={tagsOf}
@@ -374,7 +393,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
             ))}
           </div>
         )}
-        {!(byTheme && fixedType && !themesKey && !tagsKey) && shown.length < sorted.length && (
+        {!(byTheme && manhwaShelf && !themesKey && !tagsKey) && shown.length < sorted.length && (
           <div ref={sentinelRef} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
             Showing {shown.length} of {sorted.length}…
           </div>

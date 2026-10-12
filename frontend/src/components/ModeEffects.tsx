@@ -45,7 +45,7 @@ export function ModeEffects() {
     const panic = () => {
       setCurtain(null)
       setMode('clean', { instant: true })
-      if (/^\/(title|community-lists)/.test(window.location.pathname)) navigate('/', { replace: true })
+      if (/^\/(title|community-lists|manhwa)/.test(window.location.pathname)) navigate('/', { replace: true })
       showToast('Clean mode on', 'success')
     }
     const onKey = (e: KeyboardEvent) => {

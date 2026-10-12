@@ -2,10 +2,8 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 import { MediaType, Status, STATUS_LABELS } from '../types/media'
 import type { SortOption } from './SortSelect'
 import type { ContentMode } from '../hooks/useAdultFilter'
+import { ChipScroller } from './ChipScroller'
 
-export type VaultView = 'grid' | 'list' | 'themes'
-
-const STATUSES: (Status | 'all')[] = ['all', 'watching', 'completed', 'on_hold', 'dropped', 'plan_to_watch']
 const STATUS_DOT: Record<Status | 'all', string> = {
   all: 'bg-slate-400',
   watching: 'bg-jade-400',
@@ -14,7 +12,10 @@ const STATUS_DOT: Record<Status | 'all', string> = {
   dropped: 'bg-vermilion-500',
   plan_to_watch: 'bg-sky-400',
 }
-const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa']
+
+export type VaultView = 'grid' | 'list' | 'themes'
+
+const STATUSES: (Status | 'all')[] = ['all', 'watching', 'completed', 'on_hold', 'dropped', 'plan_to_watch']
 const SORTS: { value: SortOption; label: string }[] = [
   { value: 'recent', label: 'Recently added' },
   { value: 'title-asc', label: 'Title A–Z' },
@@ -116,6 +117,10 @@ interface VaultHeaderProps {
   onClearAll: () => void
   onCinema: () => void
   cinemaDisabled: boolean
+  showThemes?: boolean
+  themeRail?: { id: string; label: string; count: number }[]
+  selectedThemes?: string[]
+  onToggleTheme?: (id: string) => void
   children?: ReactNode
 }
 
@@ -127,8 +132,8 @@ export function VaultHeader(p: VaultHeaderProps) {
     <div className="mb-4 space-y-2.5">
       {/* Hero */}
       <section className="vault-hero relative overflow-hidden rounded-3xl glass animate-fade-up">
-        <div className="absolute -top-24 -left-10 w-64 h-64 rounded-full bg-lantern-500/20 blur-3xl animate-float" />
-        <div className="absolute -bottom-28 right-1/4 w-64 h-64 rounded-full bg-jade-500/15 blur-3xl animate-float [animation-delay:-3s]" />
+        <div className="vault-orb vault-orb-a" />
+        <div className="vault-orb vault-orb-b" />
         <span className="vault-kanji pointer-events-none select-none absolute right-3 -bottom-5 font-jp font-bold text-[96px] leading-none">
           {p.kanji}
         </span>
@@ -172,7 +177,7 @@ export function VaultHeader(p: VaultHeaderProps) {
           <div className="flex items-center justify-between md:justify-end gap-1 shrink-0 rounded-2xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 px-2 py-1.5">
             <Stat value={p.counts.all} label="Total" tone="text-gradient" />
             <span className="w-px h-7 bg-slate-200 dark:bg-white/10" />
-            <Stat value={p.counts.watching} label={p.mediaType === 'anime' ? 'Watching' : 'Reading'} tone="text-jade-400" />
+            <Stat value={p.counts.watching} label={p.mediaType === 'anime' ? 'Watching' : 'Reading'} tone="stat-live" />
             <span className="w-px h-7 bg-slate-200 dark:bg-white/10" />
             <DoneRing done={p.counts.completed} total={p.counts.all} />
           </div>
@@ -180,58 +185,63 @@ export function VaultHeader(p: VaultHeaderProps) {
       </section>
 
       {/* Toolbar */}
-      <div className="vault-toolbar glass rounded-2xl p-1.5 flex flex-wrap items-center gap-1.5 sticky top-2 lg:top-[4.25rem] z-20">
-        {!p.fixedType && (
-          <div className="seg">
-            {MEDIA_TYPES.map((t) => (
-              <button key={t} onClick={() => p.onMediaType(t)} className={`seg-btn ${p.mediaType === t ? 'seg-on' : ''}`}>
-                {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+      <div className="vault-toolbar glass rounded-2xl p-1.5 flex items-center gap-1.5 sticky top-2 lg:top-[4.25rem] z-20">
+        {p.showThemes ? (
+          <>
+            <button
+              type="button"
+              onClick={p.onToggleThemes}
+              className={`ctl gap-1.5 shrink-0 ${p.themesOpen ? '!border-[#ffa21f]/60 !text-[#ffd688] bg-[#f98a07]/10' : ''}`}
+              aria-expanded={p.themesOpen}
+            >
+              <span className={`transition-transform duration-300 ${p.themesOpen ? 'rotate-90' : ''}`}>✦</span>
+              Themes
+              {p.themeCount > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full text-[10px] font-bold text-white bg-gradient-to-br from-lantern-500 to-vermilion-600">
+                  {p.themeCount}
+                </span>
+              )}
+            </button>
+            <ChipScroller className="flex-1 min-w-0">
+              {(p.themeRail ?? []).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => p.onToggleTheme?.(t.id)}
+                  className={`chip !px-2.5 !py-1 !text-[11px] ${p.selectedThemes?.includes(t.id) ? 'chip-active' : ''}`}
+                >
+                  {t.label} <span className="opacity-60 tabular-nums">{t.count}</span>
+                </button>
+              ))}
+            </ChipScroller>
+          </>
+        ) : (
+          <div className="seg flex-1 min-w-0 overflow-x-auto">
+            {STATUSES.map((s) => (
+              <button key={s} type="button" onClick={() => p.onStatus(s)} className={`seg-btn gap-1.5 ${p.status === s ? 'seg-on' : ''}`}>
+                {s !== 'all' && <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[s]}`} />}
+                {s === 'all' ? 'All' : STATUS_LABELS[s]}
+                <span className="text-[10px] opacity-60 tabular-nums">{p.counts[s]}</span>
               </button>
             ))}
           </div>
         )}
 
-        <div className="seg hidden xl:flex">
-          {STATUSES.map((s) => (
-            <button key={s} onClick={() => p.onStatus(s)} className={`seg-btn gap-1.5 ${p.status === s ? 'seg-on' : ''}`}>
-              {s !== 'all' && <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[s]}`} />}
-              {s === 'all' ? 'All' : STATUS_LABELS[s]}
-              <span className="text-[10px] opacity-60 tabular-nums">{p.counts[s]}</span>
-            </button>
-          ))}
-        </div>
-        <select
-          value={p.status}
-          onChange={(e) => p.onStatus(e.target.value as Status | 'all')}
-          className="ctl xl:hidden pr-7"
-          aria-label="Status"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s === 'all' ? 'All statuses' : STATUS_LABELS[s]} ({p.counts[s]})
-            </option>
-          ))}
-        </select>
-
-        {p.fixedType && (
-          <button
-            type="button"
-            onClick={p.onToggleThemes}
-            className={`ctl gap-1.5 ${p.themesOpen ? '!border-lantern-400/60 !text-lantern-300 bg-lantern-500/10' : ''}`}
-            aria-expanded={p.themesOpen}
-          >
-            <span className={`transition-transform duration-300 ${p.themesOpen ? 'rotate-90' : ''}`}>✦</span>
-            Themes
-            {p.themeCount > 0 && (
-              <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full text-[10px] font-bold text-white bg-gradient-to-br from-lantern-500 to-vermilion-600">
-                {p.themeCount}
-              </span>
-            )}
-            <span className={`text-[10px] transition-transform duration-300 ${p.themesOpen ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          {p.showThemes && (
+            <select
+              value={p.status}
+              onChange={(e) => p.onStatus(e.target.value as Status | 'all')}
+              className="ctl pr-7"
+              aria-label="Status"
+            >
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s === 'all' ? `All ${p.counts.all}` : `${STATUS_LABELS[s]} (${p.counts[s]})`}
+                </option>
+              ))}
+            </select>
+          )}
           <select value={p.sort} onChange={(e) => p.onSort(e.target.value as SortOption)} className="ctl pr-7" aria-label="Sort">
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -245,7 +255,7 @@ export function VaultHeader(p: VaultHeaderProps) {
               [
                 ['grid', '▦', 'Grid view'],
                 ['list', '☰', 'List view'],
-                ...(p.fixedType ? ([['themes', '🗂', 'Group by theme']] as const) : []),
+                ...(p.showThemes ? ([['themes', '🗂', 'Group by theme']] as const) : []),
               ] as const
             ).map(([v, icon, label]) => (
               <button key={v} onClick={() => p.onView(v)} title={label} aria-label={label} className={`seg-btn !px-2.5 ${p.view === v ? 'seg-on' : ''}`}>
@@ -256,23 +266,12 @@ export function VaultHeader(p: VaultHeaderProps) {
 
           <button
             type="button"
-            onClick={() => p.onContentMode(p.contentMode === 'creamy' ? 'clean' : 'creamy')}
-            className={`mode-pill ${p.contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
-            title={p.contentMode === 'creamy' ? 'Creamy: showing 18+ — tap for Clean' : `Clean: ${p.hiddenCount} hidden — tap for Creamy`}
-          >
-            <span className="mode-knob">{p.contentMode === 'creamy' ? '🔥' : '🍃'}</span>
-            <span className="text-xs font-bold pr-1">{p.contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
-          </button>
-
-          <button
-            type="button"
             onClick={p.onCinema}
             disabled={p.cinemaDisabled}
-            className="ctl !px-2.5 hover:!border-jade-400/60 hover:shadow-[0_6px_20px_-8px_rgba(7,196,168,.8)] disabled:opacity-40"
-            title="Cinema poster wall"
-            aria-label="Cinema poster wall"
+            className="cinema-btn disabled:opacity-40"
+            title="Fullscreen poster wall"
           >
-            🎞️
+            🎞️ Cinema
           </button>
         </div>
       </div>

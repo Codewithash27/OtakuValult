@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -44,6 +45,12 @@ OFF_TOPIC_RE = re.compile(
     r"\b(prime\s+minister|pm|minister|president|india|usa|china|country|war|politic\w*|election|government|stock|crypto|bitcoin|weather|recipe|homework|"
     r"math|equation|physics|chemistry|biology|history\s+of|python|javascript|java|sql|program(ming)?|code|"
     r"covid|news|capital\s+of|population|celebrity|cricket|football|ipl|movie\s+review|translate|essay)\b",
+    re.I,
+)
+LOOKUP_RE = re.compile(
+    r"^\s*(?:can\s+you\s+|please\s+)?(?:show|open|tell\s+me\s+about|tell\s+about|about|details?\s+(?:of|on|about)|"
+    r"info(?:rmation)?\s+(?:on|about)|what\s+is|who\s+is|search(?:\s+for)?|find|look\s+up)\s+(?:me\s+)?(?:the\s+)?"
+    r"(?P<q>.+?)(?:\s+(?P<t>anime|manga|manhwa|webtoon|series|show))?\s*[?.!]*$",
     re.I,
 )
 SHELF_RE = re.compile(r"\b(my|mine|shelf|library|stats|watching|reading|completed|dropped|plan|progress|next|recommend|suggest|similar|like)\b", re.I)
@@ -217,6 +224,39 @@ class RAGService:
 
         return "\n".join(lines)
 
+    async def _anilist_lookup(
+        self, query: str, type_hint: str, shelf_items: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        from app.services.anilist import search_anilist
+
+        kinds = ["manga"] if type_hint in ("manga", "manhwa", "webtoon") else ["anime"] if type_hint == "anime" else ["anime", "manga"]
+        try:
+            batches = await asyncio.gather(*(search_anilist(query, k) for k in kinds), return_exceptions=True)
+        except Exception as exc:
+            logger.warning("AniList lookup failed: %s", exc)
+            return []
+
+        shelf = {(s.get("title") or "").strip().lower(): s.get("status") or "on shelf" for s in shelf_items}
+        out: list[dict[str, Any]] = []
+        for batch in batches:
+            if isinstance(batch, Exception):
+                continue
+            for r in sorted(batch[:6], key=lambda x: x.rating or 0, reverse=True)[:2]:
+                titles = {(r.title or "").lower(), (r.alt_title or "").lower()} - {""}
+                status = next((shelf[t] for t in titles if t in shelf), None)
+                overview = re.sub(r"<[^>]+>|\s+", " ", r.overview or "").strip()
+                out.append({
+                    "title": r.title,
+                    "media_type": r.media_type,
+                    "year": r.year,
+                    "total": r.total,
+                    "rating": r.rating,
+                    "overview": overview[:280],
+                    "shelf_status": status,
+                    "url": f"https://anilist.co/{'anime' if r.media_type == 'anime' else 'manga'}/{str(r.external_id).split(':')[-1]}",
+                })
+        return out[:3]
+
     async def chat_completion(
         self,
         messages: list[dict[str, str]],
@@ -256,6 +296,21 @@ class RAGService:
             retrieved_docs, shelf_items or [], last_user_msg, full_shelf=full_shelf
         )
 
+        # 3. Live AniList lookup for "show/open/tell me about <title>" so unknown titles still get real details
+        lookup_results: list[dict[str, Any]] = []
+        lookup = LOOKUP_RE.match(last_user_msg) if intent in ("query", "followup") else None
+        if lookup and len(lookup.group("q").strip()) >= 2:
+            lookup_results = await self._anilist_lookup(
+                lookup.group("q").strip(), (lookup.group("t") or "").lower(), shelf_items or []
+            )
+            if lookup_results:
+                context_str += f"\n\n### Live AniList lookup for \"{lookup.group('q').strip()}\":\n" + "\n".join(
+                    f"- **{r['title']}** ({r['media_type']}, {r.get('year') or '?'}, "
+                    f"{r.get('total') or '?'} {'eps' if r['media_type'] == 'anime' else 'ch'}, score {r.get('rating') or '?'}) "
+                    f"| ON USER'S SHELF: {'yes, status ' + r['shelf_status'] if r['shelf_status'] else 'NO'}\n  {r['overview']}"
+                    for r in lookup_results
+                )
+
         system_prompt = f"""You are Kimetsu, the friendly in-app AI buddy for OtakuVault. Talk like a fun otaku friend, never like a script.
 
 ### HOW TO RESPOND
@@ -265,6 +320,10 @@ class RAGService:
 - For recommendations give 2-4 picks, each with a one-line reason tied to the user's request.
 - When you ask the user a question or a choice helps, end with ONE line: [OPTIONS: a | b | c]
   2-4 options, max 4 words each, specific to THIS conversation (e.g. genres they hinted at, titles you just mentioned, the next logical step). Don't offer what they already picked.
+  Never list options as a./b./1./2. in the text — option labels must be the full words (e.g. a title name).
+- SHELF TRUTH: a title is on the user's shelf ONLY if it appears in the "User Shelf" list or is marked "ON USER'S SHELF: yes" below. Otherwise never say they have it, watched it, or completed it.
+- When the user asks to show/open a title, give its details (premise, type, episodes/chapters, score) from the lookup; if it's not on their shelf, say so and suggest adding it.
+- Never write URLs or page paths like /library; the app shows buttons for navigation.
 
 ### CURRENT TURN
 {INTENT_GUIDE[intent]}
@@ -320,7 +379,10 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
         if options_match:
             raw_opts = options_match.group(1).strip()
             delimiter = "|" if "|" in raw_opts else ","
-            options = [opt.strip().strip('"') for opt in raw_opts.split(delimiter) if opt.strip()]
+            options = [
+                o for o in (opt.strip().strip('"') for opt in raw_opts.split(delimiter))
+                if len(re.sub(r"^[a-z0-9][.)]\s*", "", o, flags=re.I)) > 2
+            ]
             reply_text = re.sub(options_re, "", raw_reply, flags=re.DOTALL | re.IGNORECASE).strip()
         else:
             reply_text = raw_reply
@@ -344,6 +406,10 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
                 "actionType": "message",
                 "title": opt,
             })
+
+        for r in lookup_results[:2]:
+            short = r["title"][:22] + "…" if len(r["title"]) > 22 else r["title"]
+            actions.append({"label": f"View {short} on AniList", "title": r["title"], "url": r["url"], "actionType": "link"})
 
         # 2. Add media title "Open <Title>" buttons if titles are mentioned
         seen_titles = set()

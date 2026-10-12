@@ -154,10 +154,14 @@ export function LibraryAssistant() {
 
         // Build interactive click actions (options that send a message or open a title)
         const actions = (data.actions || []).map(
-          (act: { label: string; itemId?: string; slug?: string; title?: string; type?: string; actionType?: string }) => {
+          (act: { label: string; itemId?: string; slug?: string; title?: string; type?: string; url?: string; actionType?: string }) => {
             return {
               label: act.label,
               onClick: () => {
+                if (act.actionType === 'link' && act.url) {
+                  window.open(act.url, '_blank', 'noopener,noreferrer')
+                  return
+                }
                 // If this is an option choice button -> send that choice into the conversation
                 if (act.actionType === 'message' || (!act.itemId && !act.slug && !act.title)) {
                   // Clean emoji prefixes if needed or send directly

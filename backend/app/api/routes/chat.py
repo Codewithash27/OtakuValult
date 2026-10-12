@@ -32,7 +32,8 @@ class ChatAction(BaseModel):
     slug: str | None = None
     title: str | None = None
     type: str | None = None
-    actionType: str = "open"  # "open" or "message"
+    url: str | None = None
+    actionType: str = "open"  # "open", "message" or "link"
 
 
 class ChatResponse(BaseModel):

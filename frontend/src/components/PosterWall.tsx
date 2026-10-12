@@ -83,7 +83,7 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
   const open = (item: MediaItem) => {
     const href = detailHref(item)
     if (href) {
-      navigate(href)
+      navigate(href, { state: { from: window.location.pathname } })
       return
     }
     setSearchParams((prev) => {

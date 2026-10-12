@@ -186,7 +186,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
   const openItem = (item: MediaItem) => {
     const href = detailHref(item)
     if (href) {
-      navigate(href)
+      navigate(href, { state: { from: window.location.pathname } })
       return
     }
     setSearchParams((prev) => {

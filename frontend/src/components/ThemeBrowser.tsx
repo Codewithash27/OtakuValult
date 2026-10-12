@@ -42,7 +42,7 @@ export function ThemeFilter({
 
   const otherTags = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const i of items) for (const t of tagsOf(i) ?? []) if (!THEME_TAGS.has(t)) counts.set(t, (counts.get(t) || 0) + 1)
+    for (const i of items) for (const t of tagsOf(i) ?? []) if (!THEME_TAGS.has(t.toLowerCase())) counts.set(t, (counts.get(t) || 0) + 1)
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, MORE_TAGS)
   }, [items, tagsOf])
 

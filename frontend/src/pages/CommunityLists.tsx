@@ -346,7 +346,7 @@ export default function CommunityLists() {
 
   if (slug) {
     return (
-      <ManhwaSeriesDetail slug={decodeURIComponent(slug)} backHref={`/community-lists${listQuery}`} />
+      <ManhwaSeriesDetail key={slug} slug={decodeURIComponent(slug)} backHref={`/community-lists${listQuery}`} />
     )
   }
 

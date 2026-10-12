@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MediaItem, anilistId } from '../types/media'
 import { MODE_KEY, OVERRIDES_KEY, PREFS_CHANGED_EVENT as CHANGE_EVENT, schedulePrefsPush } from '../lib/prefsSync'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { MediaMeta, useAniListMeta } from '../lib/anilistMeta'
+import { fetchCatalogueTags } from '../lib/pornhwadb'
+import { isBackendConfigured } from '../lib/api'
 
 export { ADULT_GENRES } from '../lib/anilistMeta'
 
@@ -73,13 +76,51 @@ export function useItemMeta(items: MediaItem[]) {
     [items]
   )
   const meta = useAniListMeta(ids)
+  const catalogue = useCatalogueTags(items)
   return useCallback(
     (item: MediaItem): MediaMeta | undefined => {
       const id = anilistId(item)
-      return id !== null ? meta[String(id)] : undefined
+      if (id !== null) return meta[String(id)]
+      const tags = catalogueTagsFor(item, catalogue)
+      return tags ? { a: true, t: tags } : undefined
     },
-    [meta]
+    [meta, catalogue]
   )
+}
+
+type CatalogueTags = { bySlug: Record<string, string[]>; byTitle: Record<string, string[]> }
+
+function catalogueTagsFor(item: MediaItem, cat: CatalogueTags | undefined): string[] | undefined {
+  if (!cat) return undefined
+  if (item.source === 'pornhwadb' && item.external_id) {
+    const tags = cat.bySlug[item.external_id.toLowerCase()]
+    if (tags) return tags
+  }
+  return item.media_type === 'manhwa' ? cat.byTitle[titleKey(item.title)] : undefined
+}
+
+const titleKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Catalogue (PornhwaDB) tags for shelf manhwa that have no AniList id, by slug or title. */
+function useCatalogueTags(items: MediaItem[]) {
+  const { slugs, titles } = useMemo(() => {
+    const s = new Set<string>()
+    const t = new Set<string>()
+    for (const i of items) {
+      if (anilistId(i) !== null || i.media_type !== 'manhwa') continue
+      if (i.source === 'pornhwadb' && i.external_id) s.add(i.external_id.toLowerCase())
+      t.add(titleKey(i.title))
+    }
+    return { slugs: [...s].sort(), titles: [...t].sort() }
+  }, [items])
+  const { data } = useQuery({
+    queryKey: ['catalogue-tags', slugs, titles],
+    queryFn: () => fetchCatalogueTags(slugs, titles),
+    enabled: isBackendConfigured() && (slugs.length > 0 || titles.length > 0),
+    staleTime: 60 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  })
+  return data
 }
 
 /** Returns a function telling whether an item is 18+ (AniList data, overridden by the user's manual flag). */

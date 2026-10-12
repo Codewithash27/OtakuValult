@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChipScroller } from './ChipScroller'
 
 /** Gradient for a 0-100 score badge. */
@@ -18,16 +18,9 @@ export function BackPill({ to }: { to?: string }) {
       <path fillRule="evenodd" d="M12.7 4.3a1 1 0 010 1.4L8.4 10l4.3 4.3a1 1 0 01-1.4 1.4l-5-5a1 1 0 010-1.4l5-5a1 1 0 011.4 0z" clipRule="evenodd" />
     </svg>
   )
-  if (to) {
-    return (
-      <Link to={to} className={cls}>
-        {icon}
-        Back
-      </Link>
-    )
-  }
+  const hasAppHistory = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0
   return (
-    <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className={cls}>
+    <button type="button" onClick={() => (hasAppHistory ? navigate(-1) : navigate(to ?? '/'))} className={cls}>
       {icon}
       Back
     </button>
@@ -123,8 +116,9 @@ export function CoverCard({
   badge?: string
   subtitle?: string
 }) {
+  const { state } = useLocation()
   return (
-    <Link to={to} className="group block w-[118px] shrink-0 snap-start lift">
+    <Link to={to} state={state} className="group block w-[118px] shrink-0 snap-start lift">
       <div className="poster-shine relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 aspect-[2/3] bg-slate-800 group-hover:ring-lantern-400/60 group-hover:shadow-[0_14px_30px_-14px_rgba(249,138,7,.7)] transition-all duration-300">
         {image && (
           <img src={image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />

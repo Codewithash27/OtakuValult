@@ -48,7 +48,9 @@ function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
 
 function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const location = useLocation()
+  const from = (location.state as { from?: string } | null)?.from
+  const pathname = from && /^\/(title|community-lists\/series)\//.test(location.pathname) ? from : location.pathname
   const [contentMode] = useContentMode()
   const items = NAV_ITEMS.filter((item) => !item.creamyOnly || contentMode === 'creamy')
 

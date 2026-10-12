@@ -30,7 +30,7 @@ export function MediaCard({ item }: MediaCardProps) {
 
   const handleOpen = () => {
     const href = detailHref(item)
-    if (href) navigate(href)
+    if (href) navigate(href, { state: { from: window.location.pathname } })
     else handleOpenDrawer()
   }
 

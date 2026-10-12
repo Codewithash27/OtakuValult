@@ -1,4 +1,7 @@
+import re
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.services import pornhwadb as phdb
 from app.services.image_proxy import register_search_image_urls
@@ -50,6 +53,37 @@ async def pornhwadb_search(
         )
     items = phdb.search_series(q, limit=limit)
     return {"query": q, "items": items}
+
+
+def _title_key(title: str) -> str:
+    """Lower-case alphanumerics only, so "Mom's Friend" matches "Moms Friend"."""
+    return re.sub(r"[^a-z0-9]", "", title.lower())
+
+
+class TagLookup(BaseModel):
+    slugs: list[str] = Field(default_factory=list, max_length=2000)
+    titles: list[str] = Field(default_factory=list, max_length=2000)
+
+
+@router.post("/pornhwadb/tags")
+async def pornhwadb_tags(body: TagLookup) -> dict:
+    """Catalogue tags for shelf items, matched by slug or (alternative) title."""
+    if not phdb.is_configured():
+        return {"bySlug": {}, "byTitle": {}}
+    want_slugs = {s.strip().lower() for s in body.slugs if s.strip()}
+    want_titles = {k for k in map(_title_key, body.titles) if k}
+    by_slug: dict[str, list[str]] = {}
+    by_title: dict[str, list[str]] = {}
+    for row in phdb.search_all_public():
+        tags = row.get("tags") or []
+        slug = str(row.get("slug") or "").lower()
+        if slug in want_slugs:
+            by_slug[slug] = tags
+        for name in [row.get("title"), *(row.get("alternativeTitles") or [])]:
+            key = _title_key(str(name or ""))
+            if key in want_titles and key not in by_title:
+                by_title[key] = tags
+    return {"bySlug": by_slug, "byTitle": by_title}
 
 
 @router.get("/pornhwadb/series/{slug}")

@@ -57,6 +57,17 @@ export async function getPornhwadbSimilar(
   return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}/similar?limit=${limit}`)
 }
 
+export async function fetchCatalogueTags(
+  slugs: string[],
+  titles: string[],
+): Promise<{ bySlug: Record<string, string[]>; byTitle: Record<string, string[]> }> {
+  return apiFetch('/api/pornhwadb/tags', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slugs, titles }),
+  })
+}
+
 export function proxiedPornhwaCover(url: string): string {
   return apiUrl(`/api/images/proxy?url=${encodeURIComponent(url)}`)
 }

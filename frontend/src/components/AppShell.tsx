@@ -36,16 +36,16 @@ const onLogoTap = () => {
 
 function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
-    <div className="flex items-center gap-3 select-none" onClick={onLogoTap}>
-      <div className="relative w-10 h-10 shrink-0" style={{ perspective: 400 }}>
+    <div className="flex items-center gap-2 sm:gap-3 select-none min-w-0" onClick={onLogoTap}>
+      <div className="relative w-9 h-9 sm:w-10 sm:h-10 shrink-0" style={{ perspective: 400 }}>
         <div className="absolute inset-0 rounded-[14px] bg-gradient-to-br from-lantern-400 via-vermilion-500 to-jade-400 animate-[spin_10s_linear_infinite] blur-md opacity-60" />
-        <div className="relative w-10 h-10 rounded-[14px] bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-lg text-white shadow-lg ring-1 ring-white/30">
+        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-[14px] bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-lg text-white shadow-lg ring-1 ring-white/30">
           <span className="absolute inset-x-1.5 top-1 h-px bg-white/40" />
           <span className="absolute inset-x-1.5 bottom-1 h-px bg-black/20" />
           宝
         </div>
       </div>
-      <h1 className={`font-display font-bold ${size === 'lg' ? 'text-2xl' : 'text-xl'}`}>
+      <h1 className={`font-display font-bold truncate ${size === 'lg' ? 'text-2xl' : 'text-lg sm:text-xl'}`}>
         Otaku<span className="text-gradient">Vault</span>
       </h1>
     </div>
@@ -157,26 +157,29 @@ export function AppShell() {
 
       {/* Mobile header */}
       <header className="lg:hidden glass-strong border-x-0 border-t-0 sticky top-0 z-40">
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <Logo />
-            <div className="flex items-center gap-2">
+        <div className="px-3 py-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="min-w-0 shrink">
+              <Logo />
+            </div>
+            <div className="ml-auto flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
                 className={`mode-pill !h-8 shrink-0 ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
                 title={contentMode === 'creamy' ? 'Switch to Clean' : 'Switch to Creamy'}
               >
-                <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
-                <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
+                <span className="mode-knob !w-6 !h-6 text-sm">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
+                <span className="text-[11px] font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
               </button>
-              <button onClick={handleAddItem} className="btn-glow !px-3 !py-1.5 text-sm" aria-label="Add item">
+              <button onClick={handleAddItem} className="btn-glow !px-2.5 !py-1.5 text-sm" aria-label="Add item">
                 + Add
               </button>
               <ThemeToggle />
               <button
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="w-10 h-10 grid place-items-center rounded-xl glass"
+                className="w-9 h-9 grid place-items-center rounded-xl glass shrink-0"
+                aria-label={showMobileMenu ? 'Close menu' : 'Open menu'}
               >
                 {showMobileMenu ? '✕' : '☰'}
               </button>

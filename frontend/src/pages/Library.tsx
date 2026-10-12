@@ -408,15 +408,6 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
         )}
       </div>
 
-      {/* Floating action button (mobile) */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        className="lg:hidden fixed bottom-28 right-5 w-14 h-14 btn-glow !rounded-full !p-0 text-2xl animate-float"
-        aria-label="Add item"
-      >
-        +
-      </button>
-
       {/* Modals */}
       <AddItemModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
       {showWall &&

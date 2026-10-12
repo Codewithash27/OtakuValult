@@ -104,10 +104,10 @@ export function LibraryIntro({ items, mode, isAdult, onDone }: LibraryIntroProps
         </div>
       ))}
 
-      <div className="intro-outro absolute inset-0 grid place-items-center text-center" style={{ ['--d' as string]: `${shots.length * SHOT_MS}ms` }}>
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[.45em] text-lantern-300">{creamy ? 'Tonight, after dark' : 'Welcome back'}</p>
-          <h1 className="mt-3 text-5xl sm:text-7xl font-bold">
+      <div className="intro-outro absolute inset-0 grid place-items-center text-center px-4" style={{ ['--d' as string]: `${shots.length * SHOT_MS}ms` }}>
+        <div className="w-full max-w-lg">
+          <p className="intro-outro-kicker">{creamy ? 'Tonight, after dark' : 'Welcome back'}</p>
+          <h1 className="intro-outro-title">
             {creamy ? (
               <span className="font-serif italic text-gradient">After Dark</span>
             ) : (
@@ -116,7 +116,7 @@ export function LibraryIntro({ items, mode, isAdult, onDone }: LibraryIntroProps
               </>
             )}
           </h1>
-          <p className="mt-2 text-sm text-white/60">{creamy ? 'Your 18+ manhwa, uncovered.' : 'Your anime & manga, all in one place.'}</p>
+          <p className="mt-2 text-xs sm:text-sm text-white/60 px-2">{creamy ? 'Your 18+ manhwa, uncovered.' : 'Your anime & manga, all in one place.'}</p>
         </div>
       </div>
 
@@ -124,8 +124,8 @@ export function LibraryIntro({ items, mode, isAdult, onDone }: LibraryIntroProps
       <div className="letterbox letterbox-top" />
       <div className="letterbox letterbox-bottom" />
 
-      <div className="absolute bottom-0 inset-x-0 z-10 h-[13vh] min-h-[84px] flex items-center justify-between px-5 sm:px-10">
-        <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+      <div className="intro-reel-skip">
+        <label className="flex items-center gap-2 text-[11px] sm:text-xs text-white/60 cursor-pointer shrink-0">
           <input
             type="checkbox"
             className="accent-lantern-500"
@@ -133,10 +133,10 @@ export function LibraryIntro({ items, mode, isAdult, onDone }: LibraryIntroProps
           />
           Don’t autoplay
         </label>
-        <div className="flex-1 mx-5 h-0.5 rounded-full bg-white/15 overflow-hidden max-w-md">
+        <div className="flex-1 min-w-0 h-0.5 rounded-full bg-white/15 overflow-hidden max-w-md">
           <div className="h-full bg-gradient-to-r from-lantern-400 to-jade-400 reel-timer" style={{ ['--reel-ms' as string]: `${total}ms` }} />
         </div>
-        <button onClick={finish} className="premiere-ctl !px-4">Skip ›</button>
+        <button onClick={finish} className="premiere-ctl !px-3 sm:!px-4 shrink-0">Skip ›</button>
       </div>
     </div>,
     document.body

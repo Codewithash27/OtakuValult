@@ -138,18 +138,18 @@ export function VaultHeader(p: VaultHeaderProps) {
         <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
           <div className="vault-orb vault-orb-a" />
           <div className="vault-orb vault-orb-b" />
-          <span className="vault-kanji select-none absolute right-3 -bottom-5 font-jp font-bold text-[96px] leading-none">
+          <span className="vault-kanji select-none absolute right-2 sm:right-3 -bottom-4 sm:-bottom-5 font-jp font-bold text-[64px] sm:text-[96px] leading-none">
             {p.kanji}
           </span>
         </div>
 
-        <div className="relative flex flex-col md:flex-row md:items-center gap-3 p-4 lg:px-6">
+        <div className="relative flex flex-col md:flex-row md:items-center gap-3 p-3 sm:p-4 lg:px-6">
           <div className="min-w-0 md:mr-auto">
-            <h1 className="text-2xl lg:text-[1.75rem] font-bold leading-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-[1.75rem] font-bold leading-tight">
               The <span className="text-gradient">{p.title}</span>
               {p.fixedType && ' Vault'}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{p.blurb}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 sm:line-clamp-1">{p.blurb}</p>
           </div>
 
           <div className="w-full md:w-80 lg:w-[22rem] shrink-0 z-30">
@@ -163,7 +163,7 @@ export function VaultHeader(p: VaultHeaderProps) {
             />
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-1 shrink-0 rounded-2xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 px-2 py-1.5">
+          <div className="flex items-center justify-between md:justify-end gap-1 shrink-0 rounded-2xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 px-2 py-1.5 overflow-visible">
             <Stat value={p.counts.all} label="Total" tone="text-gradient" />
             <span className="w-px h-7 bg-slate-200 dark:bg-white/10" />
             <Stat value={p.counts.watching} label={p.mediaType === 'anime' ? 'Watching' : 'Reading'} tone="stat-live" />
@@ -174,7 +174,7 @@ export function VaultHeader(p: VaultHeaderProps) {
       </section>
 
       {/* Toolbar */}
-      <div className="vault-toolbar glass rounded-2xl p-1.5 flex items-center gap-1.5 sticky top-2 z-20">
+      <div className="vault-toolbar glass rounded-2xl p-1.5 flex flex-col sm:flex-row sm:items-center gap-1.5 sticky top-[3.65rem] lg:top-2 z-20">
         {p.showThemes ? (
           <>
             <button
@@ -205,7 +205,7 @@ export function VaultHeader(p: VaultHeaderProps) {
             </ChipScroller>
           </>
         ) : (
-          <div className="seg flex-1 min-w-0 overflow-x-auto">
+          <div className="seg w-full sm:flex-1 min-w-0 overflow-x-auto">
             {STATUSES.map((s) => (
               <button key={s} type="button" onClick={() => p.onStatus(s)} className={`seg-btn gap-1.5 ${p.status === s ? 'seg-on' : ''}`}>
                 {s !== 'all' && <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[s]}`} />}
@@ -216,7 +216,7 @@ export function VaultHeader(p: VaultHeaderProps) {
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 sm:ml-auto justify-end">
           {p.showThemes && (
             <select
               value={p.status}

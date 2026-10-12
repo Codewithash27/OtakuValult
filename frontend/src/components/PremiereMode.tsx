@@ -112,14 +112,14 @@ export function PremiereMode({ items, startId, tagsOf, onOpen, onClose }: Premie
           <img key={`bg-${current.id}`} src={current.poster_url!} alt="" aria-hidden className="absolute inset-0 w-full h-full object-cover blur-3xl scale-125 opacity-45 premiere-fade" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,transparent_20%,rgba(0,0,0,.85)_75%)]" />
 
-          <div key={`${current.id}-${tick}`} className="absolute inset-0 flex items-center">
+          <div key={`${current.id}-${tick}`} className="absolute inset-0 flex items-center overflow-y-auto">
             <div className="premiere-flash absolute inset-0 pointer-events-none" />
-            <div className="relative w-full max-w-7xl mx-auto px-6 sm:px-12 grid md:grid-cols-[1fr_auto] gap-8 items-center">
+            <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-12 py-20 md:py-8 grid md:grid-cols-[1fr_auto] gap-5 sm:gap-8 items-center">
               <div className="min-w-0 order-2 md:order-1">
-                <p className="reel-in text-[11px] font-bold uppercase tracking-[.4em] text-lantern-300">
+                <p className="reel-in text-[10px] sm:text-[11px] font-bold uppercase tracking-[.16em] sm:tracking-[.4em] text-lantern-300">
                   Now premiering · {index + 1}/{queue.length}
                 </p>
-                <h2 className="reel-title mt-3 text-4xl sm:text-6xl lg:text-7xl font-display font-extrabold leading-[1] drop-shadow-2xl line-clamp-3">
+                <h2 className="reel-title mt-2 sm:mt-3 text-[1.75rem] sm:text-6xl lg:text-7xl font-display font-extrabold leading-[1.05] drop-shadow-2xl line-clamp-3">
                   {current.title}
                 </h2>
                 <div className="reel-in mt-4 flex flex-wrap items-center gap-2 text-sm" style={{ animationDelay: '250ms' }}>
@@ -152,7 +152,7 @@ export function PremiereMode({ items, startId, tagsOf, onOpen, onClose }: Premie
                 </div>
               </div>
               <div className="order-1 md:order-2 justify-self-center">
-                <div className="premiere-poster w-44 sm:w-60 lg:w-72 rounded-2xl overflow-hidden ring-1 ring-white/20">
+                <div className="premiere-poster w-32 sm:w-60 lg:w-72 rounded-2xl overflow-hidden ring-1 ring-white/20">
                   <PosterImage src={current.poster_url} alt={current.title} mediaType={current.media_type} className="w-full aspect-[2/3] kenburns-slow" />
                 </div>
               </div>
@@ -170,7 +170,7 @@ export function PremiereMode({ items, startId, tagsOf, onOpen, onClose }: Premie
       <div className="letterbox letterbox-bottom" />
 
       {/* Top controls (inside the top bar) */}
-      <div className="absolute top-0 inset-x-0 z-10 h-[9vh] min-h-[56px] flex items-center justify-between gap-2 px-4 sm:px-8">
+      <div className="absolute top-0 inset-x-0 z-10 min-h-[56px] flex items-center justify-between gap-2 px-4 sm:px-8 pt-[max(0.4rem,env(safe-area-inset-top))]">
         <p className="hidden sm:block font-display font-bold tracking-wide">
           Otaku<span className="text-gradient">Vault</span>{' '}
           <span className={`text-white/40 font-normal text-sm ${creamy ? 'font-serif italic' : ''}`}>{creamy ? 'After Dark Premiere' : 'Premiere'}</span>
@@ -194,7 +194,7 @@ export function PremiereMode({ items, startId, tagsOf, onOpen, onClose }: Premie
       </div>
 
       {/* Bottom: timer + filmstrip (inside the bottom bar) */}
-      <div className="absolute bottom-0 inset-x-0 z-10 h-[13vh] min-h-[84px] flex items-center gap-3 px-4 sm:px-8">
+      <div className="absolute bottom-0 inset-x-0 z-10 min-h-[72px] flex items-center gap-2 sm:gap-3 px-3 sm:px-8 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <button onClick={prev} className="premiere-ctl !w-10" aria-label="Previous">⏮</button>
         <button onClick={() => setPaused((p) => !p)} className="premiere-ctl !w-12 !h-12 !rounded-full text-lg" aria-label={paused ? 'Play' : 'Pause'}>
           {paused ? '▶' : '❚❚'}

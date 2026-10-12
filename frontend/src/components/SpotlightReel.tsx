@@ -160,16 +160,16 @@ export function SpotlightReel({ items, tagsOf, onOpen, onPremiere, afterDark = f
       <div className="absolute inset-0 bg-gradient-to-t from-[#070b12] via-transparent to-transparent" />
       <div className="reel-grain absolute inset-0 pointer-events-none" />
 
-      <div key={`${current.id}-${tick}`} className="relative grid md:grid-cols-[1fr_auto] gap-5 p-5 sm:p-7 md:min-h-[300px]">
+      <div key={`${current.id}-${tick}`} className="relative grid grid-cols-[minmax(0,1fr)_auto] gap-3 sm:gap-5 p-4 sm:p-7 md:min-h-[300px] items-center">
         <div className="flex flex-col justify-center min-w-0 max-w-2xl">
-          <p className="reel-in text-[10px] font-bold uppercase tracking-[.35em] text-lantern-300" style={{ animationDelay: '50ms' }}>
+          <p className="reel-in text-[10px] font-bold uppercase tracking-[.16em] sm:tracking-[.35em] text-lantern-300" style={{ animationDelay: '50ms' }}>
             {slide.kicker === 'Continue' ? `Continue ${verb}` : slide.kicker}
           </p>
-          <h2 className="reel-title mt-2 text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold leading-[1.05] line-clamp-2">
+          <h2 className="reel-title mt-1.5 sm:mt-2 text-[1.45rem] sm:text-4xl lg:text-5xl font-display font-extrabold leading-[1.08] line-clamp-2">
             {current.title}
           </h2>
 
-          <div className="reel-in mt-3 flex flex-wrap items-center gap-2 text-xs" style={{ animationDelay: '250ms' }}>
+          <div className="reel-in mt-2 sm:mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs" style={{ animationDelay: '250ms' }}>
             <span className="px-2 py-0.5 rounded-md bg-white/10 border border-white/15 font-bold uppercase tracking-wider text-[10px]">
               {current.media_type}
             </span>
@@ -187,22 +187,27 @@ export function SpotlightReel({ items, tagsOf, onOpen, onPremiere, afterDark = f
                 {current.rating ? <span className="font-bold text-amber-300">★ {current.rating}/10</span> : null}
               </>
             )}
-            {tags.map((t) => (
-              <span key={t} className="px-2 py-0.5 rounded-full bg-lantern-500/15 text-lantern-200 border border-lantern-400/25 text-[11px]">
+            {tags.map((t, i) => (
+              <span
+                key={t}
+                className={`px-2 py-0.5 rounded-full bg-lantern-500/15 text-lantern-200 border border-lantern-400/25 text-[11px] ${
+                  i >= 2 ? 'hidden sm:inline-flex' : ''
+                }`}
+              >
                 {t}
               </span>
             ))}
           </div>
 
           {synopsis && (
-            <p className="reel-in mt-3 text-sm text-white/70 leading-relaxed line-clamp-2 sm:line-clamp-3" style={{ animationDelay: '350ms' }}>
+            <p className="reel-in mt-2 sm:mt-3 text-xs sm:text-sm text-white/70 leading-relaxed line-clamp-2 sm:line-clamp-3" style={{ animationDelay: '350ms' }}>
               {synopsis}
             </p>
           )}
 
           {current.total ? (
-            <div className="reel-in mt-3 flex items-center gap-3 text-xs text-white/60" style={{ animationDelay: '420ms' }}>
-              <div className="h-1.5 w-44 rounded-full bg-white/15 overflow-hidden">
+            <div className="reel-in mt-2.5 sm:mt-3 flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-white/60" style={{ animationDelay: '420ms' }}>
+              <div className="h-1.5 flex-1 min-w-0 max-w-[11rem] sm:max-w-[16rem] rounded-full bg-white/15 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-lantern-400 to-jade-400"
                   style={{ width: `${Math.min(100, (current.progress / current.total) * 100)}%` }}
@@ -212,43 +217,43 @@ export function SpotlightReel({ items, tagsOf, onOpen, onPremiere, afterDark = f
             </div>
           ) : null}
 
-          <div className="reel-in mt-5 flex flex-wrap gap-2" style={{ animationDelay: '500ms' }}>
+          <div className="reel-in mt-3 sm:mt-5 flex flex-nowrap sm:flex-wrap gap-1.5 sm:gap-2" style={{ animationDelay: '500ms' }}>
             {cat ? (
               <>
                 <button
                   onClick={() => !added[cat.slug] && add.mutate(cat)}
                   disabled={add.isPending || !!added[cat.slug]}
-                  className="btn-glow !py-2.5 !px-5 text-sm disabled:opacity-80"
+                  className="btn-glow !py-2 !px-3.5 sm:!py-2.5 sm:!px-5 text-sm disabled:opacity-80"
                 >
                   {added[cat.slug] ? '✓ Added' : add.isPending ? 'Adding…' : '➕ Add to vault'}
                 </button>
-                <button onClick={openSlide} className="h-10 px-4 rounded-xl text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-md transition-colors">
+                <button onClick={openSlide} className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-md transition-colors">
                   📖 Details
                 </button>
               </>
             ) : (
               <>
-                <button onClick={openSlide} className="btn-glow !py-2.5 !px-5 text-sm">
+                <button onClick={openSlide} className="btn-glow !py-2 !px-3 sm:!py-2.5 sm:!px-5 text-sm whitespace-nowrap">
                   {current.status === 'watching' ? '▶ Continue' : '📖 Details'}
                 </button>
                 <button
                   onClick={() => onPremiere(current)}
-                  className="h-10 px-4 rounded-xl text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-md transition-colors"
+                  className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-sm font-semibold bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-md transition-colors whitespace-nowrap shrink-0"
                 >
-                  🎬 Premiere mode
+                  🎬 <span className="sm:hidden">Premiere</span><span className="hidden sm:inline">Premiere mode</span>
                 </button>
               </>
             )}
           </div>
         </div>
 
-        <button onClick={openSlide} className="reel-poster hidden md:block self-center w-44 lg:w-48 rounded-2xl overflow-hidden ring-1 ring-white/20">
+        <button onClick={openSlide} className="reel-poster self-center w-24 sm:w-36 md:w-44 lg:w-48 rounded-xl sm:rounded-2xl overflow-hidden ring-1 ring-white/20 shrink-0">
           <PosterImage src={current.poster_url} alt={current.title} mediaType={current.media_type} className="w-full aspect-[2/3] kenburns" />
         </button>
       </div>
 
       {/* Thumbnails with timer */}
-      <div className="relative flex items-center gap-2 px-5 sm:px-7 pb-4">
+      <div className="relative flex items-center gap-2 px-4 sm:px-7 pb-3 sm:pb-4">
         <button onClick={prev} className="reel-nav" aria-label="Previous">‹</button>
         <div className="flex-1 flex gap-1.5 min-w-0">
           {slides.map(({ item }, i) => (

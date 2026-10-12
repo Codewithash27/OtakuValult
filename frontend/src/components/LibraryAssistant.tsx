@@ -7,6 +7,7 @@ import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 import { MediaItem, MediaType, STATUS_LABELS, detailHref, type Status } from '../types/media'
 import { apiUrl } from '../lib/api'
 import { useAddItem } from '../hooks/useMediaMutations'
+import { setAdultOverrides } from '../hooks/useAdultFilter'
 
 interface Lookup {
   title: string
@@ -17,7 +18,8 @@ interface Lookup {
   external_id: string
   poster_url?: string | null
   shelf_status?: string | null
-  url: string
+  source?: 'anilist' | 'pornhwadb'
+  url: string | null
 }
 
 type AddStep = 'status' | 'progress' | 'rating'
@@ -73,7 +75,8 @@ export function LibraryAssistant() {
   const adapter = useMemo<ChatAdapter>(() => {
     const shortTitle = (t: string) => (t.length > 22 ? t.slice(0, 22) + '…' : t)
 
-    const lookupHref = (l: Pick<Lookup, 'external_id' | 'media_type'>) => {
+    const lookupHref = (l: Pick<Lookup, 'external_id' | 'media_type' | 'source'>) => {
+      if (l.source === 'pornhwadb') return `/community-lists/series/${encodeURIComponent(l.external_id)}`
       const [prefix, num] = l.external_id.includes(':') ? l.external_id.split(':') : [l.media_type, l.external_id]
       return `/title/${prefix === 'anime' ? 'anime' : 'manga'}/${num}`
     }
@@ -85,9 +88,11 @@ export function LibraryAssistant() {
       onClick: () => openItem(i),
     })
 
-    const findOnShelf = (title: string) => {
+    const findOnShelf = (title: string, externalId?: string) => {
       const t = title.trim().toLowerCase()
-      return itemsRef.current.find((i) => i.title.trim().toLowerCase() === t)
+      return itemsRef.current.find(
+        (i) => (externalId && i.external_id === externalId) || i.title.trim().toLowerCase() === t
+      )
     }
 
     const unitOf = (l: Lookup) => (l.media_type === 'anime' ? 'episodes' : 'chapters')
@@ -106,7 +111,7 @@ export function LibraryAssistant() {
 
     const lookupActions = (lookups: Lookup[], send?: (t: string) => void) =>
       lookups.flatMap((l) => {
-        const owned = findOnShelf(l.title)
+        const owned = findOnShelf(l.title, l.external_id)
         return [
           owned
             ? openShelfItem(owned)
@@ -119,7 +124,7 @@ export function LibraryAssistant() {
       flowRef.current = null
       const l = f.item
       try {
-        await addItemRef.current({
+        const newId = await addItemRef.current({
           title: l.title,
           media_type: l.media_type,
           poster_url: l.poster_url ?? null,
@@ -129,9 +134,10 @@ export function LibraryAssistant() {
           progress: f.progress ?? 0,
           total: l.total ?? null,
           notes: null,
-          source: 'anilist',
+          source: l.source ?? 'anilist',
           external_id: l.external_id,
         })
+        if (l.source === 'pornhwadb') setAdultOverrides([newId], true)
         const progress = l.total ? `${f.progress ?? 0}/${l.total}` : `${f.progress ?? 0} ${unitOf(l)}`
         const extra = [STATUS_LABELS[f.status!], f.status === 'plan_to_watch' ? '' : progress, rating ? `★ ${rating}` : '']
           .filter(Boolean)
@@ -163,7 +169,7 @@ export function LibraryAssistant() {
       }
 
       if (f.step === 'status') {
-        const owned = findOnShelf(l.title)
+        const owned = findOnShelf(l.title, l.external_id)
         if (owned) {
           flowRef.current = null
           return {
@@ -298,7 +304,9 @@ export function LibraryAssistant() {
 
       // Typed "add it" / "add <title>" right after a lookup starts the add flow without another API call
       if (!flowRef.current && lastLookupsRef.current.length) {
-        const refersToLast = /\b(add|have|track|save|put)\b.*\b(it|this|that|one)\b/i.test(lastMsg)
+        const refersToLast =
+          /\b(add|have|track|save|put)\b.*\b(it|this|that|one)\b/i.test(lastMsg) ||
+          /^\s*(yes|yeah|yep|yup|ok(ay)?|sure|haan|ha)?[\s,!]*(add|save|track)(\s+(it|pls|please|now))?[\s.!]*$/i.test(lastMsg)
         const named = /^\s*add\s+(.+?)(?:\s+(?:to|in|into|on)\s+(?:my\s+)?(?:shelf|list|library))?\s*[.!]*$/i.exec(lastMsg)?.[1]?.toLowerCase()
         const hit = refersToLast
           ? lastLookupsRef.current[0]
@@ -406,7 +414,7 @@ export function LibraryAssistant() {
         lastLookupsRef.current = lookups
 
         const target = lookups[0]
-        if (data.addRequest && target && !findOnShelf(target.title)) {
+        if (data.addRequest && target && !findOnShelf(target.title, target.external_id)) {
           flowRef.current = { item: target, step: 'status', asked: true }
           return {
             actions: [...statusOptions(target, sendUserMessage), { label: '📖 Details', onClick: () => navigate(lookupHref(target)) }],

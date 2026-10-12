@@ -244,7 +244,10 @@ class RAGService:
                 tags = ", ".join(doc.get("tags") or [])
                 rating = f"Rating: {doc.get('averageRating')}/5" if doc.get("averageRating") else ""
                 desc = doc.get("description") or ""
-                lines.append(f"- **{title}** | {tags} | {rating}\n  {desc[:300]}")
+                owned = self._shelf_status_for(title or "", doc.get("slug"), shelf_items)
+                lines.append(
+                    f"- **{title}** | {tags} | {rating} | ON USER'S SHELF: {'yes, status ' + owned if owned else 'NO'}\n  {desc[:300]}"
+                )
 
         return "\n".join(lines)
 
@@ -291,6 +294,39 @@ class RAGService:
                 })
         return out
 
+    @staticmethod
+    def _shelf_status_for(title: str, slug: str | None, shelf_items: list[dict[str, Any]]) -> str | None:
+        t = (title or "").strip().lower()
+        for s in shelf_items:
+            if (slug and s.get("source") == "pornhwadb" and s.get("external_id") == slug) or (s.get("title") or "").strip().lower() == t:
+                return s.get("status") or "on shelf"
+        return None
+
+    def catalogue_card(self, doc: dict[str, Any], shelf_items: list[dict[str, Any]]) -> dict[str, Any]:
+        """Catalogue (PornhwaDB) entry shaped like an AniList lookup so the app can add/open it."""
+        overview = re.sub(r"<[^>]+>|\s+", " ", doc.get("description") or "").strip()
+        return {
+            "title": doc.get("title"),
+            "media_type": "manhwa",
+            "year": doc.get("releaseYear"),
+            "total": doc.get("totalChapters"),
+            "rating": doc.get("averageRating"),
+            "overview": overview[:280],
+            "shelf_status": self._shelf_status_for(doc.get("title") or "", doc.get("slug"), shelf_items),
+            "external_id": doc.get("slug"),
+            "poster_url": doc.get("coverImage"),
+            "source": "pornhwadb",
+            "url": None,
+        }
+
+    def _catalogue_lookup(self, query: str, shelf_items: list[dict[str, Any]], content_mode: str) -> list[dict[str, Any]]:
+        if content_mode == "clean" or not self._ensure_index_loaded() or not self._metadata:
+            return []
+        scored = [(title_similarity(query, m.get("title") or ""), m) for m in self._metadata]
+        scored = [x for x in scored if x[0] >= 0.85]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [self.catalogue_card(m, shelf_items) for _, m in scored[:2]]
+
     async def _correct_title(self, text: str) -> str | None:
         """Tiny LLM call to fix misspelled/abbreviated titles (e.g. 'overloed' -> 'Overlord', 'aot' -> 'Attack on Titan')."""
         key = (settings.nvidia_api_key or os.getenv("NVIDIA_API_KEY", "")).strip()
@@ -325,12 +361,20 @@ class RAGService:
             return None
 
     async def resolve_lookup(
-        self, query: str, type_hint: str, shelf_items: list[dict[str, Any]], recent_titles: list[str]
+        self,
+        query: str,
+        type_hint: str,
+        shelf_items: list[dict[str, Any]],
+        recent_titles: list[str],
+        content_mode: str = "creamy",
     ) -> tuple[str, list[dict[str, Any]]]:
-        """Find the title the user means: context titles first, then AniList, then an LLM spelling fix."""
+        """Find the title the user means: context titles, the catalogue, AniList, then an LLM spelling fix."""
         best = max(recent_titles, key=lambda t: title_similarity(query, t), default=None)
         if best and title_similarity(query, best) >= 0.75:
             query = best
+        catalogue = self._catalogue_lookup(query, shelf_items, content_mode)
+        if catalogue:
+            return query, catalogue
         results = await self._anilist_lookup(query, type_hint, shelf_items)
         exact = results and title_similarity(query, results[0]["title"]) >= 0.95
         if not exact:
@@ -399,7 +443,9 @@ class RAGService:
             subject = recent_titles[0]  # "can I add this" -> the title we just talked about
             intent = "query"
         if len(subject) >= 2:
-            subject, lookup_results = await self.resolve_lookup(subject, type_hint, shelf_items or [], recent_titles)
+            subject, lookup_results = await self.resolve_lookup(
+                subject, type_hint, shelf_items or [], recent_titles, content_mode
+            )
             if lookup_results:
                 context_str += f"\n\n### Live AniList lookup for \"{subject}\":\n" + "\n".join(
                     f"- **{r['title']}** ({r['media_type']}, {r.get('year') or '?'}, "
@@ -407,6 +453,23 @@ class RAGService:
                     f"| ON USER'S SHELF: {'yes, status ' + r['shelf_status'] if r['shelf_status'] else 'NO'}\n  {r['overview']}"
                     for r in lookup_results
                 )
+
+        # Add requests are handled by the app's add flow; answering here keeps the title exact and skips an LLM call
+        if add_request and lookup_results:
+            top = lookup_results[0]
+            owned = top.get("shelf_status")
+            reply = (
+                f"**{top['title']}** is already on your shelf ({str(owned).replace('_', ' ')})."
+                if owned
+                else f"Adding **{top['title']}** — what's your status for it?"
+            )
+            return {
+                "reply": reply,
+                "actions": [],
+                "retrievedCount": len(retrieved_docs),
+                "lookups": lookup_results[:1],
+                "addRequest": not owned,
+            }
 
         system_prompt = f"""You are Kimetsu, the friendly in-app AI buddy for OtakuVault. Talk like a fun otaku friend, never like a script.
 
@@ -422,7 +485,9 @@ class RAGService:
 - When the user asks to show/open a title, give its details (premise, type, episodes/chapters, score) from the lookup. If it's not on their shelf, say they can tap the ➕ Add button below (it's right here in chat). Don't add OPTIONS for adding.
 - Never tell the user to go to another page to add or open something, and never write URLs or page paths; the buttons under your message handle that.
 - If the user misspells a title, silently use the correct title from the lookup.
-- When a Live AniList lookup is given, take facts (episodes, year, score, plot) ONLY from it; never mix in details from other series.{" The user wants to add a title: confirm which title in one short sentence and ask for their status (plan to watch, watching, completed, on hold, dropped). Don't ask anything else." if add_request and lookup_results else ""}
+- You CANNOT add, save, or change anything yourself. Never say a title was added/saved/updated — the user adds it with the ➕ Add button, and the app confirms.
+- If a title is already on the user's shelf, say so (with their status) instead of offering to add it.
+- When a Live AniList lookup is given, take facts (episodes, year, score, plot) ONLY from it; never mix in details from other series.{f" The user wants to add **{lookup_results[0]['title']}** (exactly this title, no other). In one short sentence confirm it and ask for their status (plan to watch, watching, completed, on hold, dropped). Don't ask anything else." if add_request and lookup_results else ""}
 
 ### CURRENT TURN
 {INTENT_GUIDE[intent]}
@@ -495,7 +560,30 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
             reply_text = re.sub(options_re, "", raw_reply, flags=re.DOTALL | re.IGNORECASE).strip()
         else:
             reply_text = raw_reply
+            # Model sometimes writes choices as a bare "[A] | [B]" line instead of the OPTIONS tag
+            bracket_line = re.search(r"^\s*(\[[^\]\n]{2,60}\](?:\s*\|\s*\[[^\]\n]{2,60}\])+)\s*$", reply_text, re.M)
+            # ...or as an "OPTIONS:" heading followed by bullet lines
+            bullet_block = re.search(r"^\s*\**\s*OPTIONS\s*:?\s*\**\s*\n((?:[ \t]*[-*•][^\n]+\n?)+)", reply_text, re.M | re.I)
+            if bracket_line:
+                options = re.findall(r"\[([^\]\n]{2,60})\]", bracket_line.group(1))
+                reply_text = (reply_text[: bracket_line.start()] + reply_text[bracket_line.end():]).strip()
+            elif bullet_block:
+                options = [
+                    re.sub(r"^[-*•\s]+|\*\*", "", line).strip()
+                    for line in bullet_block.group(1).splitlines()
+                    if line.strip()
+                ][:4]
+                reply_text = (reply_text[: bullet_block.start()] + reply_text[bullet_block.end():]).strip()
         reply_text = APP_PATH_RE.sub("the app", reply_text)
+
+        # Catalogue titles the reply recommends become addable/openable cards too
+        if not lookup_results and retrieved_docs:
+            for d in retrieved_docs:
+                t = d.get("title") or ""
+                if t and re.search(r"\*\*" + re.escape(t) + r"\*\*", reply_text, re.I):
+                    lookup_results.append(self.catalogue_card(d, shelf_items or []))
+                if len(lookup_results) >= 2:
+                    break
 
         # If the model asked a question but forgot options, derive them from what was retrieved
         if not options and reply_text.rstrip().endswith("?") and retrieved_docs:

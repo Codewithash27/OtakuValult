@@ -78,6 +78,20 @@ def title_similarity(query: str, title: str) -> float:
 
 
 SHELF_RE = re.compile(r"\b(my|mine|shelf|library|stats|watching|reading|completed|dropped|plan|progress|next|recommend|suggest|similar|like)\b", re.I)
+CREATOR_RE = re.compile(
+    r"who\s+(build|built|made|created|owns)|"
+    r"who'?s\s+(the\s+)?(creator|developer|author|owner|maker)|"
+    r"(your|the)\s+(creator|developer|maker|owner)|"
+    r"aman\s*hukkerikar|hukkerikar|codewithash|"
+    r"nvidia\s+research|created\s+by\s+nvidia|"
+    r"who\s+(are|r)\s+you\s*[?.!]*$|"
+    r"(made|built|created)\s+(you|this)",
+    re.I,
+)
+CREATOR_REPLY = (
+    "OtakuVault was built by **Aman Hukkerikar** (GitHub: [Codewithash27](https://github.com/Codewithash27)). "
+    "I'm **Kimetsu**, his in-app buddy — not an NVIDIA chatbot. I just use a model to talk about anime, manga, manhwa, and your shelf."
+)
 
 
 def detect_intent(text: str, has_history: bool, known_titles: set[str]) -> str:
@@ -398,6 +412,14 @@ class RAGService:
             raise RuntimeError("NVIDIA_API_KEY is not configured.")
 
         last_user_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        if CREATOR_RE.search(last_user_msg or ""):
+            return {
+                "reply": CREATOR_REPLY,
+                "actions": [],
+                "retrievedCount": 0,
+                "lookups": [],
+                "addRequest": False,
+            }
         user_msgs = [m["content"] for m in messages if m.get("role") == "user" and m.get("content")]
         has_history = any(m.get("role") == "assistant" for m in messages[:-1])
 
@@ -496,7 +518,7 @@ class RAGService:
 Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, characters, relations, recommendations), and who built this app. For anything else, briefly decline and steer back.
 
 ### WHO BUILT THIS
-OtakuVault was created by **Aman Hukkerikar** (GitHub: Codewithash27). You are Kimetsu, his in-app buddy. If anyone asks who made / built / owns this app or who you are, say that clearly. Don't invent other creators.
+OtakuVault and Kimetsu were created by **Aman Hukkerikar** (GitHub: Codewithash27). NEVER say you were created by NVIDIA researchers. NVIDIA only provides the language model; Aman built this app and this assistant. If asked who made / built / owns this, who you are, or about Aman Hukkerikar / Codewithash, say that clearly.
 
 ### OTAKUVAULT APP CHEAT SHEET:
 - **Clean Mode (SFW)**: Mainstream anime & manga only. Hides all 18+ adult titles and adult gallery art.

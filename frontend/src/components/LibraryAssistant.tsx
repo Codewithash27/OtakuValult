@@ -47,6 +47,12 @@ const TYPE_WORDS: Record<string, MediaType> = {
 
 const pickRandom = <T,>(arr: T[], n: number) => [...arr].sort(() => Math.random() - 0.5).slice(0, n)
 
+const CREATOR_RE =
+  /who\s+(build|built|made|created|owns)|who'?s\s+(the\s+)?(creator|developer|author|owner|maker)|(your|the)\s+(creator|developer|maker|owner)|aman\s*hukkerikar|hukkerikar|codewithash|nvidia\s+research|created\s+by\s+nvidia|who\s+(are|r)\s+you\s*[?.!]*$|made\s+(you|this)|built\s+(you|this)|created\s+(you|this)/i
+const CREATOR_REPLY =
+  "OtakuVault was built by **Aman Hukkerikar** (GitHub: [Codewithash27](https://github.com/Codewithash27)). I'm **Kimetsu**, his in-app buddy — not an NVIDIA chatbot. I just use a model to talk about anime, manga, manhwa, and your shelf."
+const isCreatorQuestion = (text: string) => CREATOR_RE.test(text)
+
 const line = (i: MediaItem) =>
   `**${i.title}** · ${i.media_type}${i.rating ? ` · ★ ${i.rating}` : ''}${i.total ? ` · ${i.progress}/${i.total}` : ''}`
 
@@ -268,10 +274,8 @@ export function LibraryAssistant() {
         }
       }
 
-      if (/who (made|built|created|owns)|who'?s (the )?(creator|developer|author|owner)|made (this|otakuvault)|built (this|otakuvault)|your (creator|maker|developer)|whose (app|project)|about (the )?(dev|developer|creator)/.test(lower)) {
-        return {
-          content: `OtakuVault was built by **Aman Hukkerikar** ([Codewithash27](https://github.com/Codewithash27)). I'm **Kimetsu**, his in-app buddy.`,
-        }
+      if (isCreatorQuestion(lower)) {
+        return { content: CREATOR_REPLY }
       }
 
       if (/what is this app|how to use|features|about app|guide|walkthrough/.test(lower)) {
@@ -324,6 +328,8 @@ export function LibraryAssistant() {
 
       const flowReply = await handleAddFlow(lastMsg, sendUserMessage)
       if (flowReply) return stream(flowReply)
+
+      if (isCreatorQuestion(lastMsg)) return stream({ content: CREATOR_REPLY })
 
       // Prepare shelf snapshot for context
       const shelfPayload = currentShelf.slice(0, 400).map((i) => ({

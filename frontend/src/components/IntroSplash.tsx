@@ -14,6 +14,10 @@ export function IntroSplash() {
   const [leaving, setLeaving] = useState(false)
   const timer = useRef<number>()
 
+  useEffect(() => {
+    if (!show) sessionStorage.setItem(SEEN_KEY, '1')
+  }, [show])
+
   const close = useCallback(() => {
     window.clearTimeout(timer.current)
     sessionStorage.setItem(SEEN_KEY, '1')

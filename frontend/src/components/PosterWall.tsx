@@ -7,6 +7,7 @@ import { StatusBadge } from './StatusBadge'
 interface PosterWallProps {
   items: MediaItem[]
   onClose: () => void
+  onPremiere?: () => void
 }
 
 const MIN_PER_COLUMN = 8
@@ -60,7 +61,7 @@ function WallPoster({ item, onHover, onOpen }: { item: MediaItem; onHover: (i: M
   )
 }
 
-export function PosterWall({ items, onClose }: PosterWallProps) {
+export function PosterWall({ items, onClose, onPremiere }: PosterWallProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [width, setWidth] = useState(() => window.innerWidth)
@@ -102,11 +103,12 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (drawerOpen) return
+      if (drawerOpen || document.querySelector('.premiere')) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'Escape') onClose()
       else if (e.key.toLowerCase() === 's') shuffle()
       else if (e.key.toLowerCase() === 't') setTilted((t) => !t)
+      else if (e.key.toLowerCase() === 'p') onPremiere?.()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -189,8 +191,18 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
           >
             {tilted ? '▦ Flat' : '◢ Tilt'}
           </button>
-          <button onClick={shuffle} disabled={!items.length} className="btn-glow !py-2 text-sm" title="Surprise me (S)">
-            🎲 Surprise me
+          {onPremiere && (
+            <button onClick={onPremiere} disabled={!items.length} className="btn-glow !py-2 text-sm" title="Fullscreen slideshow (P)">
+              ▶ Premiere
+            </button>
+          )}
+          <button
+            onClick={shuffle}
+            disabled={!items.length}
+            className="h-10 px-3 inline-flex items-center rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-sm font-semibold transition-colors"
+            title="Surprise me (S)"
+          >
+            🎲 <span className="hidden sm:inline ml-1">Surprise me</span>
           </button>
           <button
             onClick={onClose}
@@ -228,7 +240,7 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
             </div>
           ) : null}
           <p className="mt-3 text-xs text-white/40 hidden sm:block">
-            Click a poster to open · S surprise · T tilt · Esc close
+            Click a poster to open · P premiere · S surprise · T tilt · Esc close
           </p>
         </footer>
       )}

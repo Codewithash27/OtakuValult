@@ -37,11 +37,28 @@ const notify = () => {
   schedulePrefsPush()
 }
 
+/** Fired with the target mode when a switch starts; the curtain overlay listens for it. */
+export const MODE_CURTAIN_EVENT = 'vault:mode-curtain'
+/** Delay before the mode is applied, so the change happens behind the closed curtain. */
+export const CURTAIN_CLOSE_MS = 560
+
+let pendingSwitch: number | undefined
+
+export function applyContentMode(m: ContentMode) {
+  window.clearTimeout(pendingSwitch)
+  localStorage.setItem(MODE_KEY, m)
+  notify()
+}
+
 export function useContentMode() {
   const mode = useStored(readMode)
-  const setMode = useCallback((m: ContentMode) => {
-    localStorage.setItem(MODE_KEY, m)
-    notify()
+  const setMode = useCallback((m: ContentMode, opts?: { instant?: boolean }) => {
+    if (m === readMode()) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (opts?.instant || reduced) return applyContentMode(m)
+    window.dispatchEvent(new CustomEvent<ContentMode>(MODE_CURTAIN_EVENT, { detail: m }))
+    window.clearTimeout(pendingSwitch)
+    pendingSwitch = window.setTimeout(() => applyContentMode(m), CURTAIN_CLOSE_MS)
   }, [])
   return [mode, setMode] as const
 }

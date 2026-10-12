@@ -13,30 +13,21 @@ interface ThemeFilterProps {
   selectedTags: string[]
   onToggleTheme: (id: string) => void
   onToggleTag: (name: string) => void
-  onClear: () => void
   pending: number
-  byTheme: boolean
-  onToggleByTheme: () => void
 }
 
-const MORE_TAGS = 40
+const MORE_TAGS = 60
+const TAGS_PREVIEW = 16
 
-export function ThemeFilter({
-  items,
-  tagsOf,
-  selectedThemes,
-  selectedTags,
-  onToggleTheme,
-  onToggleTag,
-  onClear,
-  pending,
-  byTheme,
-  onToggleByTheme,
-}: ThemeFilterProps) {
-  const [showMore, setShowMore] = useState(false)
+/** Fold-out panel: themes and other tags wrap instead of scrolling sideways. */
+export function ThemeFilter({ items, tagsOf, selectedThemes, selectedTags, onToggleTheme, onToggleTag, pending }: ThemeFilterProps) {
+  const [allTags, setAllTags] = useState(false)
 
   const themeCounts = useMemo(
-    () => THEMES.map((theme) => ({ theme, count: items.filter((i) => hasTheme(tagsOf(i), theme)).length })).filter((t) => t.count > 0),
+    () =>
+      THEMES.map((theme) => ({ theme, count: items.filter((i) => hasTheme(tagsOf(i), theme)).length }))
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count),
     [items, tagsOf]
   )
 
@@ -46,54 +37,63 @@ export function ThemeFilter({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, MORE_TAGS)
   }, [items, tagsOf])
 
-  const active = selectedThemes.length + selectedTags.length > 0
-  const chip = (on: boolean) => `chip !px-2.5 !py-1 !text-xs ${on ? 'chip-active' : ''}`
+  const max = themeCounts[0]?.count || 1
+  const tagsShown = allTags ? otherTags : otherTags.slice(0, TAGS_PREVIEW)
 
   return (
-    <div className="border-t border-slate-200 dark:border-white/5 pt-1.5 space-y-0.5">
-      <ChipScroller label="Themes">
-        {active && (
-          <button onClick={onClear} className={`${chip(false)} !text-rose-500`} aria-label="Clear themes">
-            ✕
-          </button>
+    <div className="glass rounded-2xl p-3 sm:p-4 space-y-4 animate-fade-up [animation-duration:.35s]">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="panel-label">Themes</span>
+          {pending > 0 && (
+            <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              Tagging {pending}…
+            </span>
+          )}
+        </div>
+        {themeCounts.length ? (
+          <div className="stagger-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-1.5">
+            {themeCounts.map(({ theme, count }) => {
+              const on = selectedThemes.includes(theme.id)
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => onToggleTheme(theme.id)}
+                  className={`theme-tile ${on ? 'theme-tile-on' : ''}`}
+                  style={{ ['--w' as string]: `${Math.max(12, (count / max) * 100)}%` }}
+                >
+                  <span className="truncate">{theme.label}</span>
+                  <span className="tabular-nums text-[11px] opacity-70">{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400">{pending ? 'Fetching tags…' : 'No tags on these titles yet.'}</p>
         )}
-        {!active && themeCounts.length > 0 && (
-          <button onClick={onToggleByTheme} className={chip(byTheme)}>
-            🗂 By theme
-          </button>
-        )}
-        {themeCounts.map(({ theme, count }) => (
-          <button key={theme.id} onClick={() => onToggleTheme(theme.id)} className={chip(selectedThemes.includes(theme.id))}>
-            {theme.label} <span className="opacity-70">{count}</span>
-          </button>
-        ))}
-        {otherTags.length > 0 && (
-          <button onClick={() => setShowMore((s) => !s)} className={chip(showMore || selectedTags.length > 0)}>
-            {showMore ? '− Fewer tags' : `+ ${otherTags.length} more tags`}
-            {selectedTags.length > 0 && !showMore ? ` · ${selectedTags.length}` : ''}
-          </button>
-        )}
-        {pending > 0 && (
-          <span className="text-[11px] text-slate-400 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-            <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-            Tagging {pending}…
-          </span>
-        )}
-        {themeCounts.length === 0 && pending === 0 && (
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-            No AniList tags on these titles yet.
-          </span>
-        )}
-      </ChipScroller>
+      </div>
 
-      {showMore && (
-        <ChipScroller label="Tags" className="animate-fade-up [animation-duration:.3s]">
-          {otherTags.map(([name, count]) => (
-            <button key={name} onClick={() => onToggleTag(name)} className={chip(selectedTags.includes(name))}>
-              {name} <span className="opacity-70">{count}</span>
-            </button>
-          ))}
-        </ChipScroller>
+      {otherTags.length > 0 && (
+        <div>
+          <span className="panel-label block mb-2">More tags</span>
+          <div className="flex flex-wrap gap-1.5">
+            {tagsShown.map(([name, count]) => (
+              <button
+                key={name}
+                onClick={() => onToggleTag(name)}
+                className={`chip !px-2.5 !py-1 !text-[11px] ${selectedTags.includes(name) ? 'chip-active' : ''}`}
+              >
+                {name} <span className="opacity-60 tabular-nums">{count}</span>
+              </button>
+            ))}
+            {otherTags.length > TAGS_PREVIEW && (
+              <button onClick={() => setAllTags((v) => !v)} className="chip !px-2.5 !py-1 !text-[11px] !border-dashed">
+                {allTags ? 'Show less' : `+${otherTags.length - TAGS_PREVIEW} more`}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -121,24 +121,28 @@ export function ThemeRows({ items, tagsOf, onOpen, onSeeAll }: ThemeRowsProps) {
     [items, tagsOf]
   )
 
+  if (!rows.length) {
+    return <p className="text-sm text-slate-500 text-center py-12">No themed titles yet — tags are still loading or missing.</p>
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       {rows.map(({ theme, total, top }) => (
         <section key={theme.id} className="animate-fade-up">
-          <div className="flex items-end justify-between mb-3">
-            <h2 className="text-xl font-bold">
+          <div className="flex items-end justify-between mb-1">
+            <h2 className="section-title">
               {theme.label} <span className="text-sm font-semibold text-slate-400">{total}</span>
             </h2>
-            <button onClick={() => onSeeAll(theme.id)} className="text-sm font-semibold text-violet-500 hover:underline">
-              See all →
+            <button onClick={() => onSeeAll(theme.id)} className="text-sm font-semibold text-lantern-400 hover:text-lantern-300 group">
+              See all <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
             </button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory -mx-1 px-1">
+          <ChipScroller railClassName="!gap-3 !items-start !pt-2 !pb-2 snap-x">
             {top.map((item) => (
               <button
                 key={item.id}
                 onClick={() => onOpen(item)}
-                className="group relative w-28 sm:w-32 shrink-0 snap-start rounded-xl overflow-hidden text-left card-ring"
+                className="group relative w-28 sm:w-32 shrink-0 snap-start rounded-xl overflow-hidden text-left lift poster-shine ring-1 ring-white/10 hover:ring-lantern-400/60"
               >
                 <PosterImage
                   src={item.poster_url}
@@ -155,7 +159,7 @@ export function ThemeRows({ items, tagsOf, onOpen, onSeeAll }: ThemeRowsProps) {
                 <p className="absolute bottom-0 inset-x-0 p-2 text-xs font-semibold text-white line-clamp-2">{item.title}</p>
               </button>
             ))}
-          </div>
+          </ChipScroller>
         </section>
       ))}
     </div>

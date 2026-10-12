@@ -7,6 +7,7 @@ import { SearchBar } from './SearchBar'
 import { LibraryAssistant } from './LibraryAssistant'
 import { InstallAppButton } from './InstallAppButton'
 import { useContentMode } from '../hooks/useAdultFilter'
+import { ModeEffects, triggerPanic } from './ModeEffects'
 
 const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean; creamyOnly?: boolean }[] = [
   { label: 'Library', icon: '📚', href: '/' },
@@ -28,9 +29,16 @@ const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({
   '--y': `${-60 - (i % 3) * 40}px`,
 })) as CSSProperties[]
 
+let lastLogoTap = 0
+const onLogoTap = () => {
+  const now = Date.now()
+  if (now - lastLogoTap < 400 && document.documentElement.dataset.mode === 'creamy') triggerPanic()
+  lastLogoTap = now
+}
+
 function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
-    <div className="flex items-center gap-3 select-none">
+    <div className="flex items-center gap-3 select-none" onClick={onLogoTap}>
       <div className="relative w-10 h-10 shrink-0" style={{ perspective: 400 }}>
         <div className="absolute inset-0 rounded-[14px] bg-gradient-to-br from-lantern-400 via-vermilion-500 to-jade-400 animate-[spin_10s_linear_infinite] blur-md opacity-60" />
         <div className="relative w-10 h-10 rounded-[14px] bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-lg text-white shadow-lg ring-1 ring-white/30">
@@ -256,6 +264,7 @@ export function AppShell() {
       <div className="lg:hidden h-24" />
 
       <LibraryAssistant />
+      <ModeEffects />
     </div>
   )
 }

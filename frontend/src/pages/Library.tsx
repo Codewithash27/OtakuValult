@@ -1,23 +1,26 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
-import { MediaItem, MediaType, Status, detailHref } from '../types/media'
+import { MediaItem, MediaType, Status, STATUS_LABELS, detailHref } from '../types/media'
 import { MediaCard } from '../components/MediaCard'
 import { MediaRow } from '../components/MediaRow'
-import { FilterChips } from '../components/FilterChips'
-import { ViewToggle } from '../components/ViewToggle'
-import { SortSelect, type SortOption } from '../components/SortSelect'
+import type { SortOption } from '../components/SortSelect'
+import { VaultHeader, type VaultView } from '../components/VaultHeader'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorBanner } from '../components/ErrorBanner'
 import { Skeleton } from '../components/Skeleton'
 import { AddItemModal } from '../components/AddItemModal'
 import { ItemDrawer } from '../components/ItemDrawer'
 import { PosterWall } from '../components/PosterWall'
+import { PremiereMode } from '../components/PremiereMode'
+import { SpotlightReel } from '../components/SpotlightReel'
+import { LibraryIntro, introWanted, useSplashDone } from '../components/LibraryIntro'
+import { PANIC_EVENT } from '../components/ModeEffects'
 import { ThemeFilter, ThemeRows } from '../components/ThemeBrowser'
 import { useContentMode, useIsAdult, useItemMeta } from '../hooks/useAdultFilter'
 import { THEMES, hasTheme } from '../lib/themes'
 
-const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa']
 const PAGE_SIZE = 60
 
 const HERO_KANJI: Partial<Record<MediaType | 'all', string>> = {
@@ -41,7 +44,26 @@ const splitParam = (v: string | null) => (v ? v.split(',').filter(Boolean) : [])
 export default function Library({ fixedType }: { fixedType?: MediaType }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [view, setView] = useState<'grid' | 'list'>(() => (localStorage.getItem('view') === 'list' ? 'list' : 'grid'))
+  const [themesOpen, setThemesOpen] = useState(false)
+  const [premiere, setPremiere] = useState<{ startId?: string } | null>(null)
+  const [intro, setIntro] = useState(() => !fixedType && introWanted())
+  const splashDone = useSplashDone()
+
+  useEffect(() => {
+    const onPanic = () => {
+      setPremiere(null)
+      setIntro(false)
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('wall')
+        next.delete('item')
+        return next
+      })
+    }
+    window.addEventListener(PANIC_EVENT, onPanic)
+    return () => window.removeEventListener(PANIC_EVENT, onPanic)
+  }, [setSearchParams])
   const [sort, setSort] = useState<SortOption>('recent')
   const [showAddModal, setShowAddModal] = useState(false)
 
@@ -175,14 +197,6 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
     })
   }
 
-  const clearThemes = () =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.delete('themes')
-      next.delete('tags')
-      return next
-    })
-
   const openItem = (item: MediaItem) => {
     const href = detailHref(item)
     if (href) {
@@ -224,6 +238,45 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
     setSearchParams('')
   }
 
+  const setParam = (name: string, value: string | null) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (value) next.set(name, value)
+        else next.delete(name)
+        return next
+      },
+      { replace: true }
+    )
+
+  const handleSearch = (q: string) => setParam('q', q || null)
+
+  const handleView = (v: VaultView) => {
+    if (v === 'themes') {
+      setByTheme(true)
+      return
+    }
+    setByTheme(false)
+    setView(v)
+    localStorage.setItem('view', v)
+  }
+
+  const pills = [
+    ...(!fixedType && mediaType !== 'all'
+      ? [{ key: 'type', label: mediaType, onRemove: () => handleMediaTypeChange('all') }]
+      : []),
+    ...(status !== 'all'
+      ? [{ key: 'status', label: STATUS_LABELS[status as Status], onRemove: () => handleStatusChange('all') }]
+      : []),
+    ...(searchQ ? [{ key: 'q', label: `“${searchQ}”`, onRemove: () => handleSearch('') }] : []),
+    ...selectedThemes.map((id) => ({
+      key: `t-${id}`,
+      label: THEMES.find((t) => t.id === id)?.label ?? id,
+      onRemove: () => toggleListParam('themes', id),
+    })),
+    ...selectedTags.map((name) => ({ key: `g-${name}`, label: `#${name}`, onRemove: () => toggleListParam('tags', name) })),
+  ]
+
   if (isLoading) {
     return <Skeleton count={8} view={view} />
   }
@@ -233,140 +286,56 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
       <div className="max-w-7xl mx-auto">
         {error && <ErrorBanner error={error as Error} onRetry={() => refetch()} />}
 
-        {/* Hero */}
-        <section className="relative overflow-hidden rounded-2xl glass px-4 py-3 lg:px-5 mb-4 animate-fade-up">
-          <div className="absolute -top-20 -right-10 w-48 h-48 rounded-full bg-gradient-to-br from-lantern-500/30 to-jade-500/20 blur-3xl animate-float" />
-          <span className="pointer-events-none select-none absolute right-4 -bottom-6 font-jp font-bold text-[88px] leading-none text-white/[0.04]">
-            {HERO_KANJI[mediaType] ?? '宝'}
-          </span>
-          <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0">
-              <h1 className="text-2xl lg:text-3xl font-bold leading-tight">
-                The <span className="text-gradient">{HERO[mediaType].title}</span>
-                {fixedType && ' Vault'}
-              </h1>
-              <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400 truncate">{HERO[mediaType].blurb}</p>
-            </div>
-            <div className="flex gap-2">
-              {[
-                { label: 'Total', value: counts.all, color: 'from-violet-500 to-fuchsia-500' },
-                { label: 'Watching', value: counts.watching, color: 'from-cyan-400 to-sky-500' },
-                { label: 'Done', value: counts.completed, color: 'from-emerald-400 to-teal-500' },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-xl px-3 py-1.5 bg-white/60 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 flex items-baseline gap-1.5"
-                >
-                  <span className={`text-lg font-display font-bold bg-gradient-to-r ${s.color} bg-clip-text text-transparent`}>
-                    {s.value}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Filter toolbar */}
-        <div className="glass rounded-2xl p-2.5 mb-4 space-y-2 animate-fade-up">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-            {fixedType ? (
-              <div className="min-w-0 lg:flex-1">
-                <FilterChips compact selectedStatus={status as Status | 'all'} onStatusChange={handleStatusChange} counts={counts} />
-              </div>
-            ) : (
-            <div className="flex gap-1 p-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/20 overflow-x-auto">
-              {MEDIA_TYPES.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => handleMediaTypeChange(type)}
-                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-300 ${
-                    mediaType === type
-                      ? 'chip-active !scale-100'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
-                </button>
-              ))}
-            </div>
-            )}
-            <div className="flex items-center gap-2 lg:ml-auto flex-wrap shrink-0">
-              <div
-                role="radiogroup"
-                aria-label="Content mode"
-                className="relative flex p-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/20"
-                title={hiddenCount ? `${hiddenCount} adult item(s) hidden` : 'Creamy shows 18+, Clean hides it'}
-              >
-                <span
-                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ${
-                    contentMode === 'creamy'
-                      ? 'left-1 bg-gradient-to-r from-vermilion-500 to-lantern-500 shadow-[0_4px_16px_-4px_rgba(248,74,37,.7)]'
-                      : 'left-[calc(50%)] bg-gradient-to-r from-jade-500 to-cyan-500 shadow-[0_4px_16px_-4px_rgba(7,196,168,.7)]'
-                  }`}
-                />
-                {(['creamy', 'clean'] as const).map((m) => (
-                  <button
-                    key={m}
-                    role="radio"
-                    aria-checked={contentMode === m}
-                    onClick={() => setContentMode(m)}
-                    className={`relative z-10 w-[84px] py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                      contentMode === m ? 'text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <span
-                      className={`w-3 h-3 rounded-full border-2 grid place-items-center ${
-                        contentMode === m ? 'border-white' : 'border-current'
-                      }`}
-                    >
-                      {contentMode === m && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    {m === 'creamy' ? 'Creamy' : 'Clean'}
-                    {m === 'clean' && hiddenCount > 0 && contentMode === 'clean' && (
-                      <span className="text-[10px] px-1 rounded bg-white/25">-{hiddenCount}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              {((!fixedType && mediaType !== 'all') || status !== 'all' || searchQ || themesKey || tagsKey) && (
-                <button
-                  onClick={handleClearFilters}
-                  className="h-10 px-3 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors"
-                >
-                  ✕ Clear
-                </button>
-              )}
-              <SortSelect value={sort} onChange={setSort} />
-              <ViewToggle onChange={setView} />
-              <button
-                onClick={() => setShowWall(true)}
-                disabled={!sorted.length}
-                className="h-10 px-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-slate-900 to-jade-900 border border-jade-500/40 hover:shadow-[0_8px_30px_-8px_rgba(7,196,168,.7)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
-                title="Fullscreen poster wall"
-              >
-                🎞️ Cinema
-              </button>
-            </div>
-          </div>
-          {!fixedType && (
-            <FilterChips compact selectedStatus={status as Status | 'all'} onStatusChange={handleStatusChange} counts={counts} />
+        <VaultHeader
+          mediaType={mediaType}
+          fixedType={fixedType}
+          title={HERO[mediaType].title}
+          blurb={HERO[mediaType].blurb}
+          kanji={HERO_KANJI[mediaType] ?? '宝'}
+          counts={counts}
+          resultCount={sorted.length}
+          search={searchQ}
+          onSearch={handleSearch}
+          status={status as Status | 'all'}
+          onStatus={handleStatusChange}
+          onMediaType={handleMediaTypeChange}
+          sort={sort}
+          onSort={setSort}
+          view={byTheme && fixedType ? 'themes' : view}
+          onView={handleView}
+          contentMode={contentMode}
+          onContentMode={setContentMode}
+          hiddenCount={hiddenCount}
+          themesOpen={themesOpen}
+          onToggleThemes={() => setThemesOpen((o) => !o)}
+          themeCount={selectedThemes.length + selectedTags.length}
+          pills={pills}
+          onClearAll={handleClearFilters}
+          onCinema={() => setShowWall(true)}
+          cinemaDisabled={!sorted.length}
+        >
+          {fixedType && themesOpen && typeItems.length > 0 && (
+            <ThemeFilter
+              items={typeItems}
+              tagsOf={tagsOf}
+              selectedThemes={selectedThemes}
+              selectedTags={selectedTags}
+              onToggleTheme={(id) => toggleListParam('themes', id)}
+              onToggleTag={(name) => toggleListParam('tags', name)}
+              pending={pendingTags}
+            />
           )}
-          {fixedType && typeItems.length > 0 && (
-          <ThemeFilter
+        </VaultHeader>
+
+        {!pills.length && !byTheme && (
+          <SpotlightReel
             items={typeItems}
             tagsOf={tagsOf}
-            selectedThemes={selectedThemes}
-            selectedTags={selectedTags}
-            onToggleTheme={(id) => toggleListParam('themes', id)}
-            onToggleTag={(name) => toggleListParam('tags', name)}
-            onClear={clearThemes}
-            pending={pendingTags}
-            byTheme={byTheme}
-            onToggleByTheme={() => setByTheme((b) => !b)}
+            onOpen={openItem}
+            onPremiere={(item) => setPremiere({ startId: item.id })}
+            afterDark={contentMode === 'creamy' && (mediaType === 'all' || mediaType === 'manhwa')}
           />
-          )}
-        </div>
+        )}
 
         {/* Items */}
         {byTheme && fixedType && !themesKey && !tagsKey ? (
@@ -430,7 +399,27 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
 
       {/* Modals */}
       <AddItemModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
-      {showWall && <PosterWall items={sorted} onClose={() => setShowWall(false)} />}
+      {showWall &&
+        createPortal(
+          <PosterWall items={sorted} onClose={() => setShowWall(false)} onPremiere={() => setPremiere({ startId: undefined })} />,
+          document.body
+        )}
+      {intro && splashDone && (
+        <LibraryIntro items={allItems} mode={contentMode} isAdult={isAdult} onDone={() => setIntro(false)} />
+      )}
+      {premiere && (
+        <PremiereMode
+          items={sorted}
+          startId={premiere.startId}
+          tagsOf={tagsOf}
+          onClose={() => setPremiere(null)}
+          onOpen={(item) => {
+            setPremiere(null)
+            setShowWall(false)
+            openItem(item)
+          }}
+        />
+      )}
       <ItemDrawer item={selectedItem} />
     </>
   )

@@ -287,7 +287,7 @@ export function LibraryAssistant() {
       }
 
       return {
-        content: `I can help with your shelf & catalogue knowledge base. Try:\n- "What should I watch next?"\n- "Recommend a drama manhwa with intense plot"\n- "Show my stats"\n- "What am I watching right now?"`
+        content: `I can't reach my AI server right now (it may be waking up — free servers sleep). Try again in a minute; meanwhile I can still **show your stats** or **pick something from your plan-to-watch**.`
       }
     }
 
@@ -427,7 +427,13 @@ export function LibraryAssistant() {
         // Fallback gracefully to local adapter rules if backend is unreachable or offline
         if (signal.aborted) return
 
-        const fallback = runLocalFallback(lastMsg)
+        const status = Number(/API returned (\d+)/.exec(err?.message || '')?.[1]) || 0
+        const fallback: AdapterReply =
+          status === 503
+            ? { content: "My AI brain isn't connected on the server yet (the NVIDIA API key is missing), so I can only do basic shelf stuff right now. Try **Show my stats** or **What should I watch next?**" }
+            : status
+              ? { content: `The AI server hit an error (${status}). Give it a moment and try again.` }
+              : runLocalFallback(lastMsg)
         const words = (fallback.content || '').split(/(\s+)/)
         for (const w of words) {
           if (signal.aborted) break

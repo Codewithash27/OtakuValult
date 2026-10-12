@@ -23,10 +23,8 @@ env/
 .env
 .env.local
 
-# PornhwaDB export & embeddings (user-provided / generated)
+# PornhwaDB export (user-provided); generated RAG embeddings are committed so the server can load them
 backend/data/pornhwa-export.json
-backend/data/catalogue_embeddings.npz
-backend/data/catalogue_embeddings_meta.json
 
 # Local one-off scripts (contain credentials)
 backend/add_items.py

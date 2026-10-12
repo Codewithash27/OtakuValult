@@ -15,6 +15,8 @@ import {
 } from '../lib/manhwaCharts'
 import { pornhwadbStatus } from '../lib/pornhwadb'
 
+import { useMediaItems } from '../hooks/useMediaItems'
+
 const UI_PAGE_SIZE = 24
 const TAGS_COLLAPSED = 24
 
@@ -29,6 +31,10 @@ function listBackSearchParams(params: URLSearchParams): string {
 }
 
 function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string }) {
+  const { data: shelf = [] } = useMediaItems()
+  const inVault = shelf.some(
+    (i) => (i.source === 'pornhwadb' && i.external_id === item.slug) || (i.title && i.title.toLowerCase() === item.title.toLowerCase())
+  )
   const cover = chartCoverUrl(item.coverImage)
   const ratings =
     item.totalRatings === 1 ? '1 rating' : `${(item.totalRatings ?? 0).toLocaleString()} ratings`
@@ -42,6 +48,11 @@ function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string
         <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-black/75 text-[11px] font-bold text-white tabular-nums">
           #{item.rank}
         </span>
+        {inVault && (
+          <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-md bg-emerald-950/85 text-[10px] font-bold text-emerald-300 border border-emerald-500/40 backdrop-blur-sm">
+            In Vault
+          </span>
+        )}
         {cover ? (
           <img
             src={cover}
@@ -301,13 +312,21 @@ function ManhwaTopList() {
 }
 
 function CreamyGate() {
+  const [, setContentMode] = useContentMode()
   return (
-    <div className="glass rounded-2xl p-8 max-w-lg mx-auto text-center mt-8">
-      <div className="text-4xl mb-3">🔞</div>
+    <div className="glass rounded-2xl p-8 max-w-lg mx-auto text-center mt-8 space-y-3">
+      <div className="text-4xl mb-2">🔞</div>
       <h2 className="font-bold text-lg">Creamy mode only</h2>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-        Top rated manhwa is 18+. Switch to <strong>Creamy</strong> on your library to browse.
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Top rated manhwa is 18+. Switch to <strong>Creamy</strong> mode to view full series details and rankings.
       </p>
+      <button
+        type="button"
+        onClick={() => setContentMode('creamy')}
+        className="btn-glow !py-2.5 !px-6 text-sm mt-3"
+      >
+        Switch to Creamy Mode
+      </button>
     </div>
   )
 }

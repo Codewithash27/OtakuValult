@@ -3,14 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, images, pornhwadb, search
+from app.api.routes import chat, health, images, pornhwadb, search
 from app.core.config import settings
 from app.services import pornhwadb as phdb_service
+from app.services.rag_service import rag_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     phdb_service.ensure_export_file()
+    rag_service._ensure_index_loaded()
     yield
 
 
@@ -31,3 +33,4 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(search.router, prefix="/api", tags=["search"])
 app.include_router(images.router, prefix="/api", tags=["images"])
 app.include_router(pornhwadb.router, prefix="/api", tags=["pornhwadb"])
+app.include_router(chat.router, prefix="/api", tags=["chat"])

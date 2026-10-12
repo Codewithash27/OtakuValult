@@ -22,6 +22,8 @@ export interface AdapterContext {
   signal: AbortSignal
   /** Call repeatedly to stream text into the reply. */
   onToken: (chunk: string) => void
+  /** Allows action buttons/options to send a message into the conversation */
+  sendUserMessage?: (text: string) => void
 }
 
 export interface AdapterReply {

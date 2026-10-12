@@ -52,6 +52,11 @@ const Icon = {
   stop: (
     <svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
   ),
+  trash: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+    </svg>
+  ),
 }
 
 export function ChatWidget({
@@ -136,6 +141,7 @@ export function ChatWidget({
         const result = await adapter(history, {
           signal: controller.signal,
           onToken: (chunk) => patch(replyId, (m) => ({ ...m, content: m.content + chunk })),
+          sendUserMessage: (text) => send(text),
         })
         if (typeof result === 'string') patch(replyId, (m) => ({ ...m, content: result || m.content }))
         else if (result) patch(replyId, (m) => ({ ...m, content: result.content ?? m.content, actions: result.actions }))
@@ -185,6 +191,18 @@ export function ChatWidget({
   const last = messages[messages.length - 1]
   const showTyping = loading && last?.role === 'assistant' && !last.content
 
+  const handleClear = () => {
+    if (loading && abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+      setLoading(false)
+    }
+    setMessages([])
+    if (storageKey) {
+      localStorage.removeItem(storageKey)
+    }
+  }
+
   return createPortal(
     <div className={`cbw-root cbw-${position} ${dark ? 'cbw-dark' : ''} ${className}`} style={style}>
       <section className={`cbw-panel ${open ? 'cbw-open' : ''}`} role="dialog" aria-label={title} aria-hidden={!open}>
@@ -194,11 +212,14 @@ export function ChatWidget({
             <strong>{title}</strong>
             <span><i className="cbw-dot" />{loading ? 'Typing…' : subtitle}</span>
           </div>
-          {messages.length > 0 && (
-            <button className="cbw-icon-btn" onClick={() => !loading && setMessages([])} title="Clear chat">
-              ⟲
-            </button>
-          )}
+          <button
+            className="cbw-icon-btn"
+            onClick={handleClear}
+            title="Clear chat history"
+            aria-label="Clear chat"
+          >
+            {Icon.trash}
+          </button>
           <button className="cbw-icon-btn" onClick={() => setOpen(false)} aria-label="Close chat">
             {Icon.close}
           </button>

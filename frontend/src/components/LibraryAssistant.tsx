@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { ChatWidget, createLocalAdapter, type AdapterReply } from '../chatbot'
+import { useNavigate } from 'react-router-dom'
+import { ChatWidget, type AdapterReply, type ChatAdapter, type ChatMessage } from '../chatbot'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { AnimeMascot } from './AnimeMascot'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
@@ -17,7 +17,7 @@ const line = (i: MediaItem) =>
 
 export function LibraryAssistant() {
   const { data: allItems = [] } = useMediaItems()
-  const [, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [contentMode] = useContentMode()
   const isAdult = useIsAdult(allItems)
 
@@ -28,35 +28,34 @@ export function LibraryAssistant() {
   const itemsRef = useRef(items)
   itemsRef.current = items
 
-  const adapter = useMemo(() => {
-    const open = (i: MediaItem) => ({
+  const contentModeRef = useRef(contentMode)
+  contentModeRef.current = contentMode
+
+  const adapter = useMemo<ChatAdapter>(() => {
+    const openShelfItem = (i: MediaItem) => ({
       label: `Open ${i.title.length > 22 ? i.title.slice(0, 22) + '…' : i.title}`,
-      onClick: () =>
-        setSearchParams((prev) => {
-          const next = new URLSearchParams(prev)
-          next.set('item', i.id)
-          return next
-        }),
+      onClick: () => {
+        const slug =
+          i.source === 'pornhwadb' && i.external_id
+            ? i.external_id
+            : i.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        navigate(`/community-lists/series/${encodeURIComponent(slug)}`)
+      },
     })
 
-    const listReply = (title: string, list: MediaItem[], empty: string): AdapterReply =>
-      list.length
-        ? { content: `${title}\n${list.map((i) => `- ${line(i)}`).join('\n')}`, actions: list.slice(0, 3).map(open) }
-        : { content: empty }
-
-    return createLocalAdapter((input) => {
-      const text = input.toLowerCase()
+    const runLocalFallback = (text: string): AdapterReply => {
+      const lower = text.toLowerCase()
       const all = itemsRef.current
-      const type = Object.entries(TYPE_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(text))?.[1]
+      const type = Object.entries(TYPE_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(lower))?.[1]
       const pool = type ? all.filter((i) => i.media_type === type) : all
       const label = type ? `${type} ` : ''
 
-      if (!all.length) return 'Your shelf is empty right now. Use **+ Add item** or the search bar to add your first title, then ask me again!'
+      if (!all.length) return { content: 'Your shelf is empty right now. Use **+ Add item** or search to add your first title!' }
 
-      if (/^(hi|hello|hey|yo|sup)\b/.test(text))
-        return `Hey! You've got **${all.length}** titles on your shelf. Ask me what to watch next, your stats, or to find something.`
+      if (/^(hi|hello|hey|yo|sup)\b/.test(lower))
+        return { content: `Hey! You've got **${all.length}** titles on your shelf. Ask me what to watch next, your stats, or to find something.` }
 
-      if (/stat|summary|overview|how many|count/.test(text)) {
+      if (/stat|summary|overview|how many|count/.test(lower)) {
         const by = (k: keyof typeof STATUS_LABELS) => pool.filter((i) => i.status === k).length
         const rated = pool.filter((i) => i.rating)
         const avg = rated.length ? (rated.reduce((s, i) => s + (i.rating || 0), 0) / rated.length).toFixed(1) : '–'
@@ -65,64 +64,192 @@ export function LibraryAssistant() {
         )
           .map(([t, n]) => `${t} ${n}`)
           .join(' · ')
-        return `#### Your ${label}stats\n- Total: **${pool.length}**\n- Watching: **${by('watching')}** · Completed: **${by('completed')}**\n- Plan to watch: **${by('plan_to_watch')}** · On hold: **${by('on_hold')}** · Dropped: **${by('dropped')}**\n- Average rating: **${avg}**\n- ${types}`
+        return {
+          content: `#### Your ${label}stats\n- Total: **${pool.length}**\n- Watching: **${by('watching')}** · Completed: **${by('completed')}**\n- Plan to watch: **${by('plan_to_watch')}** · On hold: **${by('on_hold')}** · Dropped: **${by('dropped')}**\n- Average rating: **${avg}**\n- ${types}`
+        }
       }
 
-      if (/next|recommend|suggest|what should|bored|pick/.test(text)) {
+      if (/next|recommend|suggest|what should|bored|pick/.test(lower)) {
         const planned = pool.filter((i) => i.status === 'plan_to_watch')
         const source = planned.length ? planned : pool.filter((i) => i.status === 'on_hold')
-        return listReply(
-          `Here are some ${label}picks from your ${planned.length ? 'plan-to-watch' : 'on-hold'} list:`,
-          pickRandom(source, 3),
-          `Nothing ${label}in your plan-to-watch or on-hold lists. Add a few and I'll pick for you!`
-        )
+        const chosen = pickRandom(source, 3)
+        return {
+          content: `Here are some ${label}picks from your ${planned.length ? 'plan-to-watch' : 'on-hold'} list:\n${chosen.map((i) => `- ${line(i)}`).join('\n')}`,
+          actions: chosen.map(openShelfItem),
+        }
       }
 
-      if (/watching|reading|current|in progress|continue/.test(text))
-        return listReply(
-          `You're currently on these ${label}titles:`,
-          pool.filter((i) => i.status === 'watching').slice(0, 8),
-          `You aren't watching any ${label}titles right now.`
-        )
-
-      if (/top|best|favou?rite|highest/.test(text))
-        return listReply(
-          `Your top rated ${label}titles:`,
-          pool.filter((i) => i.rating).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5),
-          `You haven't rated any ${label}titles yet.`
-        )
-
-      if (/almost|close to|finish/.test(text)) {
-        const near = pool
-          .filter((i) => i.status === 'watching' && i.total && i.progress / i.total >= 0.6)
-          .sort((a, b) => b.progress / (b.total || 1) - a.progress / (a.total || 1))
-        return listReply('These are close to the finish line:', near.slice(0, 5), 'Nothing is close to finished yet. Keep going!')
+      if (/creamy|clean|content mode|radio button/.test(lower)) {
+        return {
+          content: `### Content Modes in OtakuVault:\n- **Clean Mode (SFW)**: Safe for all ages. Shows mainstream Anime & Manga, and hides all 18+ adult titles and adult gallery art.\n- **Creamy Mode (18+)**: Unlocks the adult catalogue, the **Top Rated (Community Lists)** Pornhwa chart, and adult panels in the Gallery.`
+        }
       }
 
-      if (/dropped/.test(text))
-        return listReply(`Titles you dropped:`, pool.filter((i) => i.status === 'dropped').slice(0, 8), 'You haven\'t dropped anything. Respect.')
+      if (/what is this app|how to use|features|about app|guide|walkthrough/.test(lower)) {
+        return {
+          content: `### Welcome to OtakuVault!\nI'm **Kimetsu**, your personal otaku companion. Here is what you can do:\n- **📚 Library**: Track what you're watching or reading, record episode/chapter progress, rate titles (1-10★), and keep notes.\n- **⛩️ Categories**: Filter your shelf by Anime, Manga, or Manhwa.\n- **⭐ Top Rated**: Browse the top-100 rated manhwa with scores and tags (in Creamy mode).\n- **🖼️ Gallery**: Save and explore high-res anime art and manga panels.\n- **⬆️ Import**: Sync your watchlists from AniList or JSON exports.\n- **💬 Kimetsu (Ctrl+K)**: Ask me for recommendations, plot synopses, and shelf stats!`
+        }
+      }
 
-      const query = text.replace(/^(find|search|do i have|is|show me|where is|open)\s+/, '').replace(/[?!.]+$/, '').trim()
+      const query = lower.replace(/^(find|search|do i have|is|show me|where is|open)\s+/, '').replace(/[?!.]+$/, '').trim()
       const matches = query.length >= 2 ? all.filter((i) => i.title.toLowerCase().includes(query)) : []
-      if (matches.length)
-        return listReply(`Found ${matches.length} on your shelf:`, matches.slice(0, 6), '')
+      if (matches.length) {
+        return {
+          content: `Found ${matches.length} on your shelf:\n${matches.slice(0, 6).map((i) => `- ${line(i)}`).join('\n')}`,
+          actions: matches.slice(0, 3).map(openShelfItem),
+        }
+      }
 
-      return `I can help with your shelf. Try:\n- "What should I watch next?"\n- "Recommend a manhwa"\n- "Show my stats"\n- "What am I watching?"\n- "Top rated anime"\n- "Almost finished"\n- Or type a title to find it`
-    })
-  }, [setSearchParams])
+      return {
+        content: `I can help with your shelf & catalogue knowledge base. Try:\n- "What should I watch next?"\n- "Recommend a drama manhwa with intense plot"\n- "Show my stats"\n- "What am I watching right now?"`
+      }
+    }
+
+    return async (messages: ChatMessage[], { signal, onToken, sendUserMessage }) => {
+      const lastMsg = messages[messages.length - 1]?.content || ''
+      const currentShelf = itemsRef.current
+      const currentMode = contentModeRef.current
+
+      // Prepare shelf snapshot for context
+      const shelfPayload = currentShelf.slice(0, 40).map((i) => ({
+        id: i.id,
+        title: i.title,
+        media_type: i.media_type,
+        status: i.status,
+        rating: i.rating,
+        progress: i.progress,
+        total: i.total,
+        notes: i.notes,
+        source: i.source,
+        external_id: i.external_id,
+      }))
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            shelfItems: shelfPayload,
+            contentMode: currentMode,
+          }),
+          signal,
+        })
+
+        if (!res.ok) {
+          throw new Error(`API returned ${res.status}`)
+        }
+
+        const data = await res.json()
+        const replyText = data.reply || ''
+
+        // Stream words to UI for natural typing experience
+        const words = replyText.split(/(\s+)/)
+        for (const w of words) {
+          if (signal.aborted) break
+          onToken(w)
+          await new Promise((r) => setTimeout(r, 8))
+        }
+
+        // Build interactive click actions (options that send a message or open a title)
+        const actions = (data.actions || []).map(
+          (act: { label: string; itemId?: string; slug?: string; title?: string; type?: string; actionType?: string }) => {
+            return {
+              label: act.label,
+              onClick: () => {
+                // If this is an option choice button -> send that choice into the conversation
+                if (act.actionType === 'message' || (!act.itemId && !act.slug && !act.title)) {
+                  // Clean emoji prefixes if needed or send directly
+                  const queryText = act.label.replace(/^[\p{Emoji}\s]+/u, '').trim() || act.label
+                  if (sendUserMessage) {
+                    sendUserMessage(queryText)
+                  }
+                  return
+                }
+
+                // Check if title is on user's shelf
+                const matchedShelfItem = currentShelf.find(
+                  (i) =>
+                    (act.itemId && i.id === act.itemId) ||
+                    (act.title && i.title.toLowerCase() === act.title.toLowerCase())
+                )
+
+                // Resolve target series slug:
+                // Priority: act.slug -> matchedShelfItem's external_id (if pornhwadb) -> act.itemId (if catalogue slug) -> slug from title
+                const targetSlug =
+                  act.slug ||
+                  (matchedShelfItem?.source === 'pornhwadb' && matchedShelfItem.external_id ? matchedShelfItem.external_id : null) ||
+                  (act.type === 'catalogue' ? act.itemId : null) ||
+                  (matchedShelfItem?.title
+                    ? matchedShelfItem.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                    : act.title
+                    ? act.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                    : null)
+
+                // Always open the rich series details page, never the edit drawer!
+                if (targetSlug) {
+                  navigate(`/community-lists/series/${encodeURIComponent(targetSlug)}`)
+                }
+              },
+            }
+          }
+        )
+
+        return { actions }
+      } catch (err: any) {
+        // Fallback gracefully to local adapter rules if backend is unreachable or offline
+        if (signal.aborted) return
+
+        const fallback = runLocalFallback(lastMsg)
+        const words = (fallback.content || '').split(/(\s+)/)
+        for (const w of words) {
+          if (signal.aborted) break
+          onToken(w)
+          await new Promise((r) => setTimeout(r, 12))
+        }
+        return { actions: fallback.actions }
+      }
+    }
+  }, [navigate])
+
+  const { welcomeMessage, suggestions } = useMemo(() => {
+    const h = new Date().getHours()
+    const hello = h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+    const watching = items.filter((i) => i.status === 'watching')
+    const planned = items.filter((i) => i.status === 'plan_to_watch')
+    const fav = [...items].filter((i) => i.rating).sort((a, b) => (b.rating || 0) - (a.rating || 0))[0]
+    const current = pickRandom(watching, 1)[0]
+
+    const intro = !items.length
+      ? `${hello}! I'm **Kimetsu**. Your shelf is empty — tell me what you enjoy and I'll find your first title.`
+      : current
+        ? `${hello}! Still on **${current.title}**? Ask me anything about it, or what you're in the mood for next.`
+        : `${hello}! You've got **${items.length}** titles on your shelf. What are you in the mood for today?`
+
+    const chips = [
+      current && `Something like ${current.title}`,
+      fav && fav.title !== current?.title && `More like ${fav.title}`,
+      planned.length ? 'Pick from my plan-to-watch' : 'Recommend a manhwa',
+      items.length ? 'Show my stats' : 'What can this app do?',
+      contentMode === 'clean' ? 'Recommend an anime' : 'Top rated manhwa',
+    ].filter(Boolean) as string[]
+
+    return { welcomeMessage: intro, suggestions: chips.slice(0, 4) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, contentMode])
 
   return (
     <ChatWidget
       adapter={adapter}
-      title="Vault Assistant"
-      subtitle="Knows your whole shelf"
+      title="Kimetsu"
+      subtitle="AI Companion · Knows your whole shelf"
       avatar={<AnimeMascot />}
       launcherIcon={<AnimeMascot />}
-      welcomeMessage="Hey! I'm your **Vault Assistant**. Ask me what to watch next, your stats, or to find a title on your shelf."
-      suggestions={['What should I watch next?', 'Show my stats', 'What am I watching?', 'Top rated', 'Recommend a manhwa']}
-      placeholder="Ask about your shelf…"
-      storageKey="vault-assistant-history"
-      theme={{ accent: '#7c3aed', accent2: '#db2777', mode: 'auto' }}
+      welcomeMessage={welcomeMessage}
+      suggestions={suggestions}
+      placeholder="Ask Kimetsu about your library, plots, recommendations…"
+      storageKey="kimetsu-assistant-history"
+      theme={{ accent: '#f59e0b', accent2: '#06b6d4', mode: 'auto' }}
       className="vault-bot"
     />
   )

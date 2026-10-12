@@ -39,7 +39,10 @@ export function InstallAppButton({ className = '' }: { className?: string }) {
   }
 
   return (
-    <button onClick={install} className={`btn-glow w-full !py-2 text-sm ${className}`}>
+    <button
+      onClick={install}
+      className={`w-full h-10 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-white/10 transition-colors ${className}`}
+    >
       📲 Install app
     </button>
   )

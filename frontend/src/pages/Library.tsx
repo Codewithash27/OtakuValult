@@ -332,6 +332,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
           onClearAll={handleClearFilters}
           onCinema={() => setShowWall(true)}
           cinemaDisabled={!sorted.length}
+          onPickShelf={openItem}
         >
           {manhwaShelf && themesOpen && typeItems.length > 0 && (
             <ThemeFilter

@@ -3,7 +3,6 @@ import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { ThemeToggle } from './ThemeToggle'
-import { SearchBar } from './SearchBar'
 import { LibraryAssistant } from './LibraryAssistant'
 import { InstallAppButton } from './InstallAppButton'
 import { useContentMode } from '../hooks/useAdultFilter'
@@ -113,7 +112,6 @@ export function AppShell() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const isDetailPage = pathname.startsWith('/title/') || pathname.startsWith('/community-lists/series/')
   const [contentMode, setContentMode] = useContentMode()
 
   useEffect(() => {
@@ -184,13 +182,16 @@ export function AppShell() {
               </button>
             </div>
           </div>
-          <SearchBar onOpenManualAdd={handleAddItem} />
         </div>
         {showMobileMenu && (
           <div className="px-4 pb-4 border-t border-slate-200 dark:border-white/10 space-y-4 animate-fade-up">
             <SidebarMenu onNavigate={() => setShowMobileMenu(false)} />
             <InstallAppButton />
-            <div className="flex items-center gap-2 pt-4 border-t border-slate-200 dark:border-white/10">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              <span className="font-jp text-lantern-500 mr-1.5">{GREETING_JP}</span>
+              {greeting}
+            </p>
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
               <span className="text-sm text-slate-500 dark:text-slate-400 flex-1 truncate">{user?.email}</span>
               <button
                 onClick={handleLogout}
@@ -206,20 +207,40 @@ export function AppShell() {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:w-72 sticky top-0 h-screen p-4">
         <div className="glass rounded-3xl flex flex-col w-full overflow-hidden">
-          <div className="p-6">
+          <div className="p-6 pb-4">
             <Logo size="lg" />
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-jp text-lantern-600 dark:text-lantern-300 mr-1.5">オタク宝庫</span>your anime vault
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-jp text-lantern-600 dark:text-lantern-300 mr-1.5">{GREETING_JP}</span>
+              {greeting}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-jp mr-1.5">オタク宝庫</span>your anime vault
             </p>
           </div>
           <div className="mx-6 h-px bg-gradient-to-r from-transparent via-lantern-500/40 to-transparent" />
           <nav className="flex-1 p-4">
             <SidebarMenu />
           </nav>
-          <div className="px-4">
+          <div className="px-4 space-y-2">
+            <button onClick={handleAddItem} className="group btn-glow w-full !rounded-xl !py-2.5 text-sm">
+              <span className="text-lg leading-none transition-transform duration-300 group-hover:rotate-90">+</span> Add item
+            </button>
             <InstallAppButton />
           </div>
           <div className="p-4 m-3 rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 space-y-3">
+            <button
+              type="button"
+              onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
+              className={`mode-pill w-full justify-center ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
+              title={
+                contentMode === 'creamy'
+                  ? 'Creamy: adult manhwa — tap for Clean (anime)'
+                  : 'Clean: anime shelf — tap for Creamy (manhwa)'
+              }
+            >
+              <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
+              <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
+            </button>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center font-bold text-white ring-2 ring-violet-500/30">
                 {initial}
@@ -239,38 +260,6 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="hidden lg:block sticky top-0 z-30 px-6 pt-3">
-          <div
-            className={`glass rounded-full flex items-center gap-3 p-1.5 pl-2 mx-auto shadow-[0_10px_40px_-20px_rgba(0,0,0,.8)] ${
-              isDetailPage ? 'max-w-6xl' : 'max-w-7xl'
-            }`}
-          >
-            <div className="flex-1 max-w-xl">
-              <SearchBar onOpenManualAdd={handleAddItem} />
-            </div>
-            <span className="ml-auto hidden xl:block text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-              <span className="font-jp text-lantern-500/80 mr-1">{GREETING_JP}</span>
-              {greeting}
-            </span>
-            <button
-              type="button"
-              onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
-              className={`mode-pill shrink-0 ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
-              title={
-                contentMode === 'creamy'
-                  ? 'Creamy: adult manhwa — tap for Clean (anime)'
-                  : 'Clean: anime shelf — tap for Creamy (manhwa)'
-              }
-            >
-              <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
-              <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
-            </button>
-            <button onClick={handleAddItem} className="group btn-glow !rounded-full !h-10 !py-0 !px-5 text-sm shrink-0">
-              <span className="text-lg leading-none transition-transform duration-300 group-hover:rotate-90">+</span> Add item
-            </button>
-          </div>
-        </header>
-
         <div key={pathname.split('/').slice(0, 3).join('/')} className="page-enter flex-1 p-4 lg:p-6">
           <Outlet />
         </div>

@@ -3,6 +3,8 @@ import { MediaType, Status, STATUS_LABELS } from '../types/media'
 import type { SortOption } from './SortSelect'
 import type { ContentMode } from '../hooks/useAdultFilter'
 import { ChipScroller } from './ChipScroller'
+import { SearchBar } from './SearchBar'
+import { MediaItem } from '../types/media'
 
 const STATUS_DOT: Record<Status | 'all', string> = {
   all: 'bg-slate-400',
@@ -121,22 +123,25 @@ interface VaultHeaderProps {
   themeRail?: { id: string; label: string; count: number }[]
   selectedThemes?: string[]
   onToggleTheme?: (id: string) => void
+  onPickShelf?: (item: MediaItem) => void
   children?: ReactNode
 }
 
 export function VaultHeader(p: VaultHeaderProps) {
-  const searchRef = useRef<HTMLInputElement>(null)
   const unit = p.mediaType === 'anime' ? 'anime' : p.mediaType === 'all' ? 'titles' : p.mediaType
+  const lockType = p.mediaType === 'anime' || p.mediaType === 'manga' || p.mediaType === 'manhwa' ? p.mediaType : 'all'
 
   return (
     <div className="mb-4 space-y-2.5">
       {/* Hero */}
-      <section className="vault-hero relative overflow-hidden rounded-3xl glass animate-fade-up">
-        <div className="vault-orb vault-orb-a" />
-        <div className="vault-orb vault-orb-b" />
-        <span className="vault-kanji pointer-events-none select-none absolute right-3 -bottom-5 font-jp font-bold text-[96px] leading-none">
-          {p.kanji}
-        </span>
+      <section className="vault-hero relative rounded-3xl glass animate-fade-up">
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="vault-orb vault-orb-a" />
+          <div className="vault-orb vault-orb-b" />
+          <span className="vault-kanji select-none absolute right-3 -bottom-5 font-jp font-bold text-[96px] leading-none">
+            {p.kanji}
+          </span>
+        </div>
 
         <div className="relative flex flex-col md:flex-row md:items-center gap-3 p-4 lg:px-6">
           <div className="min-w-0 md:mr-auto">
@@ -147,32 +152,16 @@ export function VaultHeader(p: VaultHeaderProps) {
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{p.blurb}</p>
           </div>
 
-          <label className="search-pill w-full md:w-72 lg:w-80 !h-11 shrink-0">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-lantern-400" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              ref={searchRef}
+          <div className="w-full md:w-80 lg:w-[22rem] shrink-0 z-30">
+            <SearchBar
               value={p.search}
-              onChange={(e) => p.onSearch(e.target.value)}
-              placeholder={`Search your ${unit}…`}
-              className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              onValueChange={p.onSearch}
+              lockType={lockType}
+              placeholder={`Search your ${unit}, or find new ones…`}
+              onPickShelf={p.onPickShelf}
+              onOpenManualAdd={() => window.dispatchEvent(new CustomEvent('openAddModal'))}
             />
-            {p.search && (
-              <button
-                type="button"
-                onClick={() => {
-                  p.onSearch('')
-                  searchRef.current?.focus()
-                }}
-                className="w-6 h-6 grid place-items-center rounded-full text-xs text-slate-400 hover:text-white hover:bg-vermilion-500/80 transition-colors"
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </label>
+          </div>
 
           <div className="flex items-center justify-between md:justify-end gap-1 shrink-0 rounded-2xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 px-2 py-1.5">
             <Stat value={p.counts.all} label="Total" tone="text-gradient" />
@@ -185,7 +174,7 @@ export function VaultHeader(p: VaultHeaderProps) {
       </section>
 
       {/* Toolbar */}
-      <div className="vault-toolbar glass rounded-2xl p-1.5 flex items-center gap-1.5 sticky top-2 lg:top-[4.25rem] z-20">
+      <div className="vault-toolbar glass rounded-2xl p-1.5 flex items-center gap-1.5 sticky top-2 z-20">
         {p.showThemes ? (
           <>
             <button

@@ -1,15 +1,26 @@
 import { useState, useRef, useEffect, Component, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useDebounce } from '../hooks/useDebounce'
 import { SearchResult } from '../types/search'
+import { MediaItem } from '../types/media'
 import { SearchResultCard } from './SearchResultCard'
 import { SearchResultsModal } from './SearchResultsModal'
 import { AddFromSearchDialog } from './AddFromSearchDialog'
 
+type SearchType = 'all' | 'anime' | 'manga' | 'manhwa'
+
 interface SearchBarProps {
   onOpenManualAdd?: () => void
+  /** Keep the vault grid filtered to this query. */
+  value?: string
+  onValueChange?: (q: string) => void
+  /** Limit internet + shelf results to this type (anime vault → anime, etc.). */
+  lockType?: SearchType
+  placeholder?: string
+  onPickShelf?: (item: MediaItem) => void
 }
 
 class SearchPanelBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -31,16 +42,38 @@ class SearchPanelBoundary extends Component<{ children: ReactNode }, { failed: b
   }
 }
 
-export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
-  const [query, setQuery] = useState('')
+export function SearchBar({
+  onOpenManualAdd,
+  value,
+  onValueChange,
+  lockType = 'all',
+  placeholder,
+  onPickShelf,
+}: SearchBarProps) {
+  const [query, setQuery] = useState(value ?? '')
   const [showDropdown, setShowDropdown] = useState(false)
   const [showFullModal, setShowFullModal] = useState(false)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
-  const [selectedType, setSelectedType] = useState<string>('all')
+  const [selectedType, setSelectedType] = useState<SearchType>(lockType)
+
+  useEffect(() => {
+    if (value !== undefined && value !== query) setQuery(value)
+  }, [value])
+
+  useEffect(() => {
+    setSelectedType(lockType)
+  }, [lockType])
+
+  const setQ = (q: string, filterVault = false) => {
+    setQuery(q)
+    if (filterVault || q === '') onValueChange?.(q)
+  }
 
   const searchRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [panel, setPanel] = useState({ top: 0, left: 0, width: 400 })
   const [, setSearchParams] = useSearchParams()
 
   const debouncedQuery = useDebounce(query, 400)
@@ -67,9 +100,10 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
   // Local shelf matches
   const localMatches = query.trim()
     ? mediaItems
-        .filter((item) =>
-          item.title.toLowerCase().includes(query.toLowerCase())
-        )
+        .filter((item) => {
+          if (lockType !== 'all' && item.media_type !== lockType) return false
+          return item.title.toLowerCase().includes(query.toLowerCase())
+        })
         .slice(0, 5)
     : []
 
@@ -81,10 +115,29 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
       ((isLoading || isFetching) && internetResults.length === 0))
 
   useEffect(() => {
+    const place = () => {
+      const el = searchRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const width = Math.min(Math.max(r.width, 380), window.innerWidth - 24)
+      const left = Math.min(Math.max(12, r.right - width), window.innerWidth - width - 12)
+      setPanel({ top: r.bottom + 8, left, width })
+    }
+    if (!showDropdown) return
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [showDropdown, query])
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
+      const t = e.target as Node
+      if (searchRef.current?.contains(t) || panelRef.current?.contains(t)) return
+      setShowDropdown(false)
     }
 
     window.addEventListener('mousedown', handleClickOutside)
@@ -136,14 +189,18 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
           type="text"
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value)
+            setQ(e.target.value)
             setShowDropdown(true)
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') e.preventDefault()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              onValueChange?.(query)
+              setShowDropdown(false)
+            }
           }}
           onFocus={() => setShowDropdown(true)}
-          placeholder="Search anime, manga, manhwa…"
+          placeholder={placeholder ?? 'Search your vault, or find new titles…'}
           className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
           role="combobox"
           aria-expanded={showDropdown}
@@ -156,7 +213,7 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
           <button
             type="button"
             onClick={() => {
-              setQuery('')
+              setQ('')
               inputRef.current?.focus()
             }}
             className="w-6 h-6 shrink-0 grid place-items-center rounded-full text-xs text-slate-400 hover:text-white hover:bg-vermilion-500/80 transition-colors"
@@ -169,125 +226,126 @@ export function SearchBar({ onOpenManualAdd }: SearchBarProps) {
         )}
       </label>
 
-      {/* Dropdown panel */}
-      {showDropdown && query.trim() && (
-        <div className="absolute top-full left-0 right-0 mt-2 glass-strong rounded-2xl shadow-2xl z-40 max-h-[70vh] overflow-y-auto animate-fade-up [animation-duration:.25s]">
-          {/* On my shelf section */}
-          {localMatches.length > 0 && (
-            <div className="border-b border-gray-200 dark:border-gray-700">
-              <div className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700">
-                On my shelf
-              </div>
-              <div className="space-y-2 p-3">
-                {localMatches.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setShowDropdown(false)
-                      setSearchParams({ item: item.id })
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {item.media_type}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* From the internet section */}
-          {query.trim().length >= 2 && (
-            <div>
-              <div className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700">
-                From the internet
-              </div>
-
-              {/* Type tabs */}
-              <div className="px-3 py-2 flex gap-1 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-                {(['all', 'anime', 'manga', 'manhwa'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setSelectedType(t)}
-                    className={`chip !px-3 !py-1 !text-xs ${selectedType === t ? 'chip-active' : ''}`}
-                  >
-                    {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              {/* Results */}
-              <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
-                {searchPending ? (
-                  <p className="text-xs text-gray-500 text-center py-4">Searching...</p>
-                ) : error ? (
-                  <div className="text-center py-4 px-2">
-                    <p className="text-xs text-red-500">
-                      {error instanceof Error ? error.message : 'Search failed'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => refetch()}
-                      className="mt-2 text-xs text-sky-600 dark:text-sky-400"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : internetResults.length === 0 ? (
-                  <p className="text-xs text-gray-500 text-center py-4">No results</p>
-                ) : (
-                  <SearchPanelBoundary>
-                    {internetResults.map((result) => (
-                      <SearchResultCard
-                        key={`${result.source}:${result.external_id}`}
-                        result={result}
-                        onAdd={handleAddResult}
-                        isOnShelf={shelfItems.has(`${result.source}:${result.external_id}`)}
-                        isAdding={false}
-                      />
-                    ))}
-                    {searchData && searchData.results.length > 8 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowFullModal(true)}
-                        className="w-full text-xs px-3 py-2 text-sky-600 dark:text-sky-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                      >
-                        See all results ({searchData.results.length})
-                      </button>
-                    )}
-                  </SearchPanelBoundary>
-                )}
-              </div>
-
-              {/* Error note */}
-              {searchData?.errors && Object.keys(searchData.errors).length > 0 && (
-                <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/10">
-                  <p className="text-xs text-amber-800 dark:text-amber-200">
-                    {Object.values(searchData.errors)[0]}
+      {showDropdown &&
+        query.trim() &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[80] glass-strong rounded-2xl overflow-hidden animate-fade-up [animation-duration:.2s]"
+            style={{
+              top: panel.top,
+              left: panel.left,
+              width: panel.width,
+              maxHeight: 'min(70vh, 28rem)',
+              boxShadow: '0 24px 60px -20px rgb(0 0 0 / .75)',
+            }}
+          >
+            <div className="overflow-y-auto max-h-[min(70vh,28rem)]">
+              {localMatches.length > 0 && (
+                <div className="border-b border-white/10">
+                  <p className="px-3.5 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">
+                    On your shelf
                   </p>
+                  <div className="px-1.5 pb-2">
+                    {localMatches.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setShowDropdown(false)
+                          if (onPickShelf) onPickShelf(item)
+                          else
+                            setSearchParams((prev) => {
+                              const next = new URLSearchParams(prev)
+                              next.set('item', item.id)
+                              return next
+                            })
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                      >
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.title}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">{item.media_type}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Footer */}
-              <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowDropdown(false)
-                    onOpenManualAdd?.()
-                  }}
-                  className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                >
-                  Can't find it? Add manually
-                </button>
-              </div>
+              {query.trim().length >= 2 && (
+                <div>
+                  <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">
+                      From the internet
+                    </p>
+                    <div className="flex gap-1">
+                      {(['anime', 'manga', 'manhwa'] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setSelectedType(t)}
+                          className={`chip !px-2 !py-0.5 !text-[10px] ${selectedType === t ? 'chip-active' : ''}`}
+                        >
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="px-1.5 pb-2 space-y-0.5">
+                    {searchPending ? (
+                      <p className="text-xs text-slate-500 text-center py-6">Searching…</p>
+                    ) : error ? (
+                      <div className="text-center py-5 px-2">
+                        <p className="text-xs text-rose-400">{error instanceof Error ? error.message : 'Search failed'}</p>
+                        <button type="button" onClick={() => refetch()} className="mt-2 text-xs text-lantern-400">
+                          Retry
+                        </button>
+                      </div>
+                    ) : internetResults.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-6">No results</p>
+                    ) : (
+                      <SearchPanelBoundary>
+                        {internetResults.map((result) => (
+                          <SearchResultCard
+                            key={`${result.source}:${result.external_id}`}
+                            result={result}
+                            onAdd={handleAddResult}
+                            isOnShelf={shelfItems.has(`${result.source}:${result.external_id}`)}
+                            isAdding={false}
+                            variant="vault"
+                          />
+                        ))}
+                        {searchData && searchData.results.length > 8 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullModal(true)}
+                            className="w-full text-xs py-2 text-lantern-400 hover:text-lantern-300"
+                          >
+                            See all results ({searchData.results.length})
+                          </button>
+                        )}
+                      </SearchPanelBoundary>
+                    )}
+                  </div>
+
+                  <div className="px-3.5 py-2.5 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDropdown(false)
+                        onOpenManualAdd?.()
+                      }}
+                      className="text-[11px] text-slate-500 hover:text-slate-200"
+                    >
+                      Can&apos;t find it? Add manually
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Full results modal */}
       {showFullModal && searchData && (

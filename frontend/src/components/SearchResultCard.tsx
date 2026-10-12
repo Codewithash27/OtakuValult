@@ -7,6 +7,7 @@ interface SearchResultCardProps {
   onAdd: (result: SearchResult) => void
   isOnShelf?: boolean
   isAdding?: boolean
+  variant?: 'default' | 'vault'
 }
 
 export function SearchResultCard({
@@ -14,10 +15,12 @@ export function SearchResultCard({
   onAdd,
   isOnShelf = false,
   isAdding = false,
+  variant = 'default',
 }: SearchResultCardProps) {
   const openAdd = () => {
     if (!isOnShelf && !isAdding) onAdd(result)
   }
+  const vault = variant === 'vault'
 
   return (
     <div
@@ -30,8 +33,10 @@ export function SearchResultCard({
           openAdd()
         }
       }}
-      className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow p-3 flex gap-3 ${
-        isOnShelf ? 'cursor-default' : 'cursor-pointer'
+      className={`flex gap-3 p-2.5 rounded-xl transition-colors ${
+        vault
+          ? `hover:bg-white/10 ${isOnShelf ? 'cursor-default' : 'cursor-pointer'}`
+          : `bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg p-3 ${isOnShelf ? 'cursor-default' : 'cursor-pointer'}`
       }`}
     >
       <div className="flex-shrink-0">
@@ -56,7 +61,9 @@ export function SearchResultCard({
                 </p>
               )}
             </div>
-            <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded whitespace-nowrap flex-shrink-0">
+            <span className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 uppercase tracking-wide ${
+              vault ? 'bg-white/10 text-white/50' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+            }`}>
               {result.source}
             </span>
           </div>
@@ -98,7 +105,11 @@ export function SearchResultCard({
             onAdd(result)
           }}
           disabled={isOnShelf || isAdding}
-          className="mt-2 self-start px-2 py-1 text-xs bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-semibold rounded transition-colors"
+          className={
+            vault
+              ? 'mt-2 self-start h-7 px-2.5 rounded-lg text-[11px] font-bold text-white bg-gradient-to-br from-lantern-500 to-vermilion-600 disabled:opacity-50'
+              : 'mt-2 self-start px-2 py-1 text-xs bg-sky-600 hover:bg-sky-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-semibold rounded transition-colors'
+          }
         >
           {isOnShelf ? '✓ On shelf' : isAdding ? '...' : '+ Add'}
         </button>

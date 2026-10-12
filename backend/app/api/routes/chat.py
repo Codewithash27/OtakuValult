@@ -40,6 +40,8 @@ class ChatResponse(BaseModel):
     reply: str
     actions: list[ChatAction] = Field(default_factory=list)
     retrievedCount: int = 0
+    lookups: list[dict[str, Any]] = Field(default_factory=list)
+    addRequest: bool = False
 
 
 @router.get("/chat/status")
@@ -73,6 +75,8 @@ async def chat_rag(payload: ChatRequest) -> ChatResponse:
             reply=result["reply"],
             actions=[ChatAction(**a) for a in result.get("actions", [])],
             retrievedCount=result.get("retrievedCount", 0),
+            lookups=result.get("lookups", []),
+            addRequest=result.get("addRequest", False),
         )
     except Exception as exc:
         logger.exception("Error during RAG chat completion: %s", exc)

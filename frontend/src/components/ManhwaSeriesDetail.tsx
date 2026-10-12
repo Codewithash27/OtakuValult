@@ -18,7 +18,7 @@ function cleanSynopsis(raw: string | null | undefined): string {
   return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function MetaPill({ children }: { children: React.ReactNode }) {
+export function MetaPill({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900/5 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-white/10">
       {children}

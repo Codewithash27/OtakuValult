@@ -13,6 +13,7 @@ import Import from './pages/Import'
 import Gallery from './pages/Gallery'
 import CommunityLists from './pages/CommunityLists'
 import NotFound from './pages/NotFound'
+import TitleDetail from './pages/TitleDetail'
 import { IntroSplash } from './components/IntroSplash'
 import { AuthShell } from './components/AuthLayout'
 import { initPrefsSync } from './lib/prefsSync'
@@ -80,6 +81,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   <Route path="/gallery" element={<Gallery />} />
                   <Route path="/community-lists" element={<CommunityLists />} />
                   <Route path="/community-lists/series/:slug" element={<CommunityLists />} />
+                  <Route path="/title/:kind/:id" element={<TitleDetail />} />
                   <Route path="/import" element={<Import />} />
                 </Route>
               </Route>

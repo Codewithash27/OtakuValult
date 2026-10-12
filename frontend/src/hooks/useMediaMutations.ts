@@ -13,13 +13,18 @@ export function useAddItem() {
   return useMutation({
     mutationFn: async (data: NewMediaItem) => {
       const { source = 'manual', external_id = null, ...rest } = data
-      const { error } = await supabase.from('media_items').insert({
-        ...rest,
-        source,
-        external_id,
-      })
+      const { data: row, error } = await supabase
+        .from('media_items')
+        .insert({
+          ...rest,
+          source,
+          external_id,
+        })
+        .select('id')
+        .single()
 
       if (error) throw error
+      return row.id as string
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media-items'] })

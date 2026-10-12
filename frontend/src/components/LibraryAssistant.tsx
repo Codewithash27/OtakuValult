@@ -4,8 +4,40 @@ import { ChatWidget, type AdapterReply, type ChatAdapter, type ChatMessage } fro
 import { useMediaItems } from '../hooks/useMediaItems'
 import { AnimeMascot } from './AnimeMascot'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
-import { MediaItem, MediaType, STATUS_LABELS } from '../types/media'
+import { MediaItem, MediaType, STATUS_LABELS, anilistId, type Status } from '../types/media'
 import { apiUrl } from '../lib/api'
+import { useAddItem } from '../hooks/useMediaMutations'
+
+interface Lookup {
+  title: string
+  media_type: MediaType
+  year?: number | null
+  total?: number | null
+  rating?: number | null
+  external_id: string
+  poster_url?: string | null
+  shelf_status?: string | null
+  url: string
+}
+
+type AddStep = 'status' | 'progress' | 'rating'
+interface AddFlow {
+  item: Lookup
+  step: AddStep
+  asked: boolean
+  status?: Status
+  progress?: number
+}
+
+const STATUS_PATTERNS: [RegExp, Status][] = [
+  [/\bplan|later|want to (watch|read)|ptw\b/i, 'plan_to_watch'],
+  [/\b(complete|completed|finished|watched|done|read it)\b/i, 'completed'],
+  [/\b(watching|reading|ongoing|currently|in progress)\b/i, 'watching'],
+  [/\b(hold|paused|pause)\b/i, 'on_hold'],
+  [/\b(drop|dropped|quit|stopped)\b/i, 'dropped'],
+]
+const CANCEL_RE = /^(cancel|stop|never ?mind|nvm|no|don'?t add|skip it)\b/i
+const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
 
 const TYPE_WORDS: Record<string, MediaType> = {
   anime: 'anime', manga: 'manga', manhwa: 'manhwa', webtoon: 'manhwa', pornhwa: 'manhwa',
@@ -32,17 +64,170 @@ export function LibraryAssistant() {
   const contentModeRef = useRef(contentMode)
   contentModeRef.current = contentMode
 
+  const addItem = useAddItem()
+  const addItemRef = useRef(addItem.mutateAsync)
+  addItemRef.current = addItem.mutateAsync
+  const flowRef = useRef<AddFlow | null>(null)
+  const lastLookupsRef = useRef<Lookup[]>([])
+
   const adapter = useMemo<ChatAdapter>(() => {
+    const shortTitle = (t: string) => (t.length > 22 ? t.slice(0, 22) + '…' : t)
+
+    const lookupHref = (l: Pick<Lookup, 'external_id' | 'media_type'>) => {
+      const [prefix, num] = l.external_id.includes(':') ? l.external_id.split(':') : [l.media_type, l.external_id]
+      return `/title/${prefix === 'anime' ? 'anime' : 'manga'}/${num}`
+    }
+
+    const openItem = (i: MediaItem) => {
+      const alId = anilistId(i)
+      if (i.source === 'pornhwadb' && i.external_id) {
+        navigate(`/community-lists/series/${encodeURIComponent(i.external_id)}`)
+      } else if (alId !== null) {
+        navigate(`/title/${i.media_type === 'anime' ? 'anime' : 'manga'}/${alId}`)
+      } else {
+        navigate(`/?item=${encodeURIComponent(i.id)}`)
+      }
+    }
+
     const openShelfItem = (i: MediaItem) => ({
-      label: `Open ${i.title.length > 22 ? i.title.slice(0, 22) + '…' : i.title}`,
-      onClick: () => {
-        const slug =
-          i.source === 'pornhwadb' && i.external_id
-            ? i.external_id
-            : i.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-        navigate(`/community-lists/series/${encodeURIComponent(slug)}`)
-      },
+      label: `Open ${shortTitle(i.title)}`,
+      onClick: () => openItem(i),
     })
+
+    const findOnShelf = (title: string) => {
+      const t = title.trim().toLowerCase()
+      return itemsRef.current.find((i) => i.title.trim().toLowerCase() === t)
+    }
+
+    const unitOf = (l: Lookup) => (l.media_type === 'anime' ? 'episodes' : 'chapters')
+
+    const statusOptions = (l: Lookup, send?: (t: string) => void) => {
+      const anime = l.media_type === 'anime'
+      return [anime ? 'Plan to watch' : 'Plan to read', anime ? 'Watching' : 'Reading', 'Completed', 'On hold', 'Dropped'].map(
+        (label) => ({ label, onClick: () => send?.(label) })
+      )
+    }
+
+    const startAddFlow = (l: Lookup, send?: (t: string) => void) => {
+      flowRef.current = { item: l, step: 'status', asked: false }
+      send?.(`Add ${l.title} to my shelf`)
+    }
+
+    const lookupActions = (lookups: Lookup[], send?: (t: string) => void) =>
+      lookups.flatMap((l) => {
+        const owned = findOnShelf(l.title)
+        return [
+          owned
+            ? openShelfItem(owned)
+            : { label: `➕ Add ${shortTitle(l.title)} (${l.media_type})`, onClick: () => startAddFlow(l, send) },
+          ...(owned ? [] : [{ label: `📖 ${l.media_type} details`, onClick: () => navigate(lookupHref(l)) }]),
+        ]
+      })
+
+    const saveFlow = async (f: AddFlow, rating: number | null): Promise<AdapterReply> => {
+      flowRef.current = null
+      const l = f.item
+      try {
+        await addItemRef.current({
+          title: l.title,
+          media_type: l.media_type,
+          poster_url: l.poster_url ?? null,
+          year: l.year ?? null,
+          status: f.status!,
+          rating,
+          progress: f.progress ?? 0,
+          total: l.total ?? null,
+          notes: null,
+          source: 'anilist',
+          external_id: l.external_id,
+        })
+        const progress = l.total ? `${f.progress ?? 0}/${l.total}` : `${f.progress ?? 0} ${unitOf(l)}`
+        const extra = [STATUS_LABELS[f.status!], f.status === 'plan_to_watch' ? '' : progress, rating ? `★ ${rating}` : '']
+          .filter(Boolean)
+          .join(' · ')
+        return {
+          content: `${pick(['Done!', 'Added!', 'All set!', 'Saved!'])} **${l.title}** is on your shelf — ${extra} ✅`,
+          actions: [
+            {
+              label: `Open ${shortTitle(l.title)}`,
+              onClick: () => navigate(lookupHref(l)),
+            },
+          ],
+        }
+      } catch (e: any) {
+        return { content: `I couldn't save **${l.title}** (${e?.message || 'unknown error'}). Try again from **+ Add item**.` }
+      }
+    }
+
+    const handleAddFlow = async (text: string, send?: (t: string) => void): Promise<AdapterReply | null> => {
+      const f = flowRef.current
+      if (!f) return null
+      const l = f.item
+      const unit = unitOf(l)
+      const totalHint = l.total ? ` (out of ${l.total})` : ''
+
+      if (f.step !== 'rating' && CANCEL_RE.test(text.trim())) {
+        flowRef.current = null
+        return { content: `No problem, I won't add **${l.title}**. What else can I help with?` }
+      }
+
+      if (f.step === 'status') {
+        const owned = findOnShelf(l.title)
+        if (owned) {
+          flowRef.current = null
+          return {
+            content: `**${l.title}** is already on your shelf (${STATUS_LABELS[owned.status]}).`,
+            actions: [openShelfItem(owned)],
+          }
+        }
+        if (!f.asked) {
+          f.asked = true
+          return {
+            content: `${pick(['Nice pick!', 'Great choice!', 'Ooh, good one!'])} What's your status for **${l.title}**?`,
+            actions: statusOptions(l, send),
+          }
+        }
+        const status = STATUS_PATTERNS.find(([re]) => re.test(text))?.[1]
+        if (!status) {
+          if (text.length > 30) {
+            flowRef.current = null
+            return null
+          }
+          return { content: `Pick a status for **${l.title}** so I can add it:`, actions: statusOptions(l, send) }
+        }
+        f.status = status
+        if (status === 'plan_to_watch') return saveFlow(f, null)
+        if (status === 'completed') {
+          f.progress = l.total ?? 0
+          f.step = 'rating'
+          return {
+            content: `Finished it! How would you rate **${l.title}** out of 10?`,
+            actions: [...[10, 9, 8, 7, 6, 5].map((n) => ({ label: `★ ${n}`, onClick: () => send?.(String(n)) })), { label: 'Skip', onClick: () => send?.('skip rating') }],
+          }
+        }
+        f.step = 'progress'
+        const q =
+          status === 'watching'
+            ? `How many ${unit} have you finished so far${totalHint}?`
+            : `Which ${unit === 'episodes' ? 'episode' : 'chapter'} did you stop at${totalHint}?`
+        return { content: q }
+      }
+
+      if (f.step === 'progress') {
+        const n = Number(text.match(/\d+/)?.[0])
+        if (!Number.isFinite(n) || n < 0 || (l.total && n > l.total)) {
+          return { content: `Just send a number${l.total ? ` between 0 and ${l.total}` : ''} — how many ${unit}?` }
+        }
+        f.progress = n
+        if (l.total && n === l.total && f.status === 'watching') f.status = 'completed'
+        return saveFlow(f, null)
+      }
+
+      if (/skip|no|later/i.test(text)) return saveFlow(f, null)
+      const r = Number(text.match(/\d+/)?.[0])
+      if (!Number.isFinite(r) || r < 1 || r > 10) return { content: 'Give me a number from 1 to 10, or say **skip**.' }
+      return saveFlow(f, r)
+    }
 
     const runLocalFallback = (text: string): AdapterReply => {
       const lower = text.toLowerCase()
@@ -110,6 +295,30 @@ export function LibraryAssistant() {
       const lastMsg = messages[messages.length - 1]?.content || ''
       const currentShelf = itemsRef.current
       const currentMode = contentModeRef.current
+
+      const stream = async (reply: AdapterReply) => {
+        for (const w of (reply.content || '').split(/(\s+)/)) {
+          if (signal.aborted) break
+          onToken(w)
+          await new Promise((r) => setTimeout(r, 8))
+        }
+        return { actions: reply.actions }
+      }
+
+      // Typed "add it" / "add <title>" right after a lookup starts the add flow without another API call
+      if (!flowRef.current && lastLookupsRef.current.length) {
+        const refersToLast = /\b(add|have|track|save|put)\b.*\b(it|this|that|one)\b/i.test(lastMsg)
+        const named = /^\s*add\s+(.+?)(?:\s+(?:to|in|into|on)\s+(?:my\s+)?(?:shelf|list|library))?\s*[.!]*$/i.exec(lastMsg)?.[1]?.toLowerCase()
+        const hit = refersToLast
+          ? lastLookupsRef.current[0]
+          : named
+            ? lastLookupsRef.current.find((l) => l.title.toLowerCase().includes(named) || named.includes(l.title.toLowerCase()))
+            : undefined
+        if (hit) flowRef.current = { item: hit, step: 'status', asked: false }
+      }
+
+      const flowReply = await handleAddFlow(lastMsg, sendUserMessage)
+      if (flowReply) return stream(flowReply)
 
       // Prepare shelf snapshot for context
       const shelfPayload = currentShelf.slice(0, 40).map((i) => ({
@@ -179,8 +388,11 @@ export function LibraryAssistant() {
                     (act.title && i.title.toLowerCase() === act.title.toLowerCase())
                 )
 
-                // Resolve target series slug:
-                // Priority: act.slug -> matchedShelfItem's external_id (if pornhwadb) -> act.itemId (if catalogue slug) -> slug from title
+                if (matchedShelfItem && matchedShelfItem.source !== 'pornhwadb') {
+                  openItem(matchedShelfItem)
+                  return
+                }
+
                 const targetSlug =
                   act.slug ||
                   (matchedShelfItem?.source === 'pornhwadb' && matchedShelfItem.external_id ? matchedShelfItem.external_id : null) ||
@@ -191,7 +403,6 @@ export function LibraryAssistant() {
                     ? act.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
                     : null)
 
-                // Always open the rich series details page, never the edit drawer!
                 if (targetSlug) {
                   navigate(`/community-lists/series/${encodeURIComponent(targetSlug)}`)
                 }
@@ -200,7 +411,18 @@ export function LibraryAssistant() {
           }
         )
 
-        return { actions }
+        const lookups: Lookup[] = data.lookups || []
+        lastLookupsRef.current = lookups
+
+        const target = lookups[0]
+        if (data.addRequest && target && !findOnShelf(target.title)) {
+          flowRef.current = { item: target, step: 'status', asked: true }
+          return {
+            actions: [...statusOptions(target, sendUserMessage), { label: '📖 Details', onClick: () => navigate(lookupHref(target)) }],
+          }
+        }
+
+        return { actions: [...lookupActions(lookups, sendUserMessage), ...actions] }
       } catch (err: any) {
         // Fallback gracefully to local adapter rules if backend is unreachable or offline
         if (signal.aborted) return

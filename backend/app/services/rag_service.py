@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import json
 import logging
 import os
@@ -49,10 +50,28 @@ OFF_TOPIC_RE = re.compile(
 )
 LOOKUP_RE = re.compile(
     r"^\s*(?:can\s+you\s+|please\s+)?(?:show|open|tell\s+me\s+about|tell\s+about|about|details?\s+(?:of|on|about)|"
-    r"info(?:rmation)?\s+(?:on|about)|what\s+is|who\s+is|search(?:\s+for)?|find|look\s+up)\s+(?:me\s+)?(?:the\s+)?"
+    r"info(?:rmation)?\s+(?:on|about)|what\s+is|who\s+is|search(?:\s+for)?|find|look\s+up|add|"
+    r"i\s*'?\s*a?m\s+talking\s+about|talking\s+about|i\s+mean[t]?|i\s+said)\s+(?:me\s+)?(?:the\s+)?"
     r"(?P<q>.+?)(?:\s+(?P<t>anime|manga|manhwa|webtoon|series|show))?\s*[?.!]*$",
     re.I,
 )
+ADD_REF_RE = re.compile(r"\b(add|have|track|save|put)\b.*\b(it|this|that|this\s+one|that\s+one|them)\b", re.I)
+BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+APP_PATH_RE = re.compile(r"`?(?<![\w.])/(?:library|anime|manga|manhwa|gallery|import|community-lists)\b`?")
+
+
+def title_similarity(query: str, title: str) -> float:
+    q, t = query.lower().strip(), title.lower().strip()
+    if not q or not t:
+        return 0.0
+    if q == t:
+        return 1.0
+    if len(q) >= 4 and q in t:
+        return 0.9
+    words_ratio = max((difflib.SequenceMatcher(None, q, w).ratio() for w in t.split()), default=0) if " " not in q else 0
+    return max(difflib.SequenceMatcher(None, q, t).ratio(), words_ratio * 0.95)
+
+
 SHELF_RE = re.compile(r"\b(my|mine|shelf|library|stats|watching|reading|completed|dropped|plan|progress|next|recommend|suggest|similar|like)\b", re.I)
 
 
@@ -237,11 +256,19 @@ class RAGService:
             return []
 
         shelf = {(s.get("title") or "").strip().lower(): s.get("status") or "on shelf" for s in shelf_items}
-        out: list[dict[str, Any]] = []
+        scored = []
         for batch in batches:
             if isinstance(batch, Exception):
                 continue
-            for r in sorted(batch[:6], key=lambda x: x.rating or 0, reverse=True)[:2]:
+            for r in batch[:8]:
+                sim = max(title_similarity(query, r.title or ""), title_similarity(query, r.alt_title or ""))
+                if sim >= 0.7:
+                    scored.append((sim, r.rating or 0, r))
+        # Best name match first; among equally good matches, the better-rated (usually main) entry
+        scored.sort(key=lambda x: (round(x[0], 1), x[1]), reverse=True)
+
+        out: list[dict[str, Any]] = []
+        for _, _, r in scored[:2]:
                 titles = {(r.title or "").lower(), (r.alt_title or "").lower()} - {""}
                 status = next((shelf[t] for t in titles if t in shelf), None)
                 overview = re.sub(r"<[^>]+>|\s+", " ", r.overview or "").strip()
@@ -253,9 +280,62 @@ class RAGService:
                     "rating": r.rating,
                     "overview": overview[:280],
                     "shelf_status": status,
+                    "external_id": r.external_id,
+                    "poster_url": r.poster_url,
                     "url": f"https://anilist.co/{'anime' if r.media_type == 'anime' else 'manga'}/{str(r.external_id).split(':')[-1]}",
                 })
-        return out[:3]
+        return out
+
+    async def _correct_title(self, text: str) -> str | None:
+        """Tiny LLM call to fix misspelled/abbreviated titles (e.g. 'overloed' -> 'Overlord', 'aot' -> 'Attack on Titan')."""
+        key = (settings.nvidia_api_key or os.getenv("NVIDIA_API_KEY", "")).strip()
+        payload = {
+            "model": CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": (
+                    "The user typed the name of an anime/manga/manhwa, possibly misspelled or abbreviated. "
+                    "Reply with ONLY the most likely well-known official title (no quotes, no extra words). "
+                    "Examples: overloed -> Overlord | aot -> Attack on Titan | solo lvling -> Solo Leveling | "
+                    "jjk -> Jujutsu Kaisen | demon slyer -> Demon Slayer. Reply NONE only if it is clearly not a title."
+                )},
+                {"role": "user", "content": text[:120]},
+            ],
+            "temperature": 0,
+            "max_tokens": 24,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post(
+                    f"{NVIDIA_BASE_URL}/chat/completions",
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+            out = (res.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
+            out = re.sub(r"<think>.*?</think>", "", out, flags=re.DOTALL).strip().strip('"*').splitlines()[0:1]
+            title = out[0].strip() if out else ""
+            return None if not title or title.upper() == "NONE" or len(title) > 80 else title
+        except Exception as exc:
+            logger.warning("Title correction failed: %s", exc)
+            return None
+
+    async def resolve_lookup(
+        self, query: str, type_hint: str, shelf_items: list[dict[str, Any]], recent_titles: list[str]
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Find the title the user means: context titles first, then AniList, then an LLM spelling fix."""
+        best = max(recent_titles, key=lambda t: title_similarity(query, t), default=None)
+        if best and title_similarity(query, best) >= 0.75:
+            query = best
+        results = await self._anilist_lookup(query, type_hint, shelf_items)
+        exact = results and title_similarity(query, results[0]["title"]) >= 0.95
+        if not exact:
+            # Partial hits like "overload" -> "Full Metal Panic! Overload!" are usually a typo of a bigger title
+            fixed = await self._correct_title(query)
+            if fixed and fixed.lower() != query.lower():
+                fixed_results = await self._anilist_lookup(fixed, type_hint, shelf_items)
+                if fixed_results:
+                    return fixed, fixed_results
+        return query, results
 
     async def chat_completion(
         self,
@@ -277,6 +357,10 @@ class RAGService:
         known_titles |= {(s.get("title") or "").strip().lower() for s in (shelf_items or [])}
         known_titles.discard("")
         intent = detect_intent(last_user_msg, has_history, known_titles)
+        lookup_text = re.sub(r"\s+(?:to|in|into|on)\s+(?:my\s+)?(?:shelf|list|library|watchlist)\b.*$", "", last_user_msg, flags=re.I)
+        lookup = LOOKUP_RE.match(lookup_text) if intent not in ("greeting", "smalltalk", "off_topic") else None
+        if lookup:
+            intent = "query"
 
         # 1. Retrieve only when it can help (saves an embedding call + prompt tokens on greetings/off-topic)
         retrieved_docs: list[dict[str, Any]] = []
@@ -298,13 +382,21 @@ class RAGService:
 
         # 3. Live AniList lookup for "show/open/tell me about <title>" so unknown titles still get real details
         lookup_results: list[dict[str, Any]] = []
-        lookup = LOOKUP_RE.match(last_user_msg) if intent in ("query", "followup") else None
-        if lookup and len(lookup.group("q").strip()) >= 2:
-            lookup_results = await self._anilist_lookup(
-                lookup.group("q").strip(), (lookup.group("t") or "").lower(), shelf_items or []
-            )
+        recent_titles = [
+            t for m in reversed(messages[:-1]) if m.get("role") == "assistant"
+            for t in BOLD_RE.findall(m.get("content") or "")
+        ][:12]
+        subject, type_hint = "", ""
+        if lookup and lookup.group("q").strip().lower() not in ("it", "this", "that", "this one", "that one"):
+            subject, type_hint = lookup.group("q").strip(), (lookup.group("t") or "").lower()
+        add_request = bool(re.search(r"\badd\b", last_user_msg, re.I)) or bool(ADD_REF_RE.search(last_user_msg))
+        if not subject and add_request and recent_titles:
+            subject = recent_titles[0]  # "can I add this" -> the title we just talked about
+            intent = "query"
+        if len(subject) >= 2:
+            subject, lookup_results = await self.resolve_lookup(subject, type_hint, shelf_items or [], recent_titles)
             if lookup_results:
-                context_str += f"\n\n### Live AniList lookup for \"{lookup.group('q').strip()}\":\n" + "\n".join(
+                context_str += f"\n\n### Live AniList lookup for \"{subject}\":\n" + "\n".join(
                     f"- **{r['title']}** ({r['media_type']}, {r.get('year') or '?'}, "
                     f"{r.get('total') or '?'} {'eps' if r['media_type'] == 'anime' else 'ch'}, score {r.get('rating') or '?'}) "
                     f"| ON USER'S SHELF: {'yes, status ' + r['shelf_status'] if r['shelf_status'] else 'NO'}\n  {r['overview']}"
@@ -322,8 +414,9 @@ class RAGService:
   2-4 options, max 4 words each, specific to THIS conversation (e.g. genres they hinted at, titles you just mentioned, the next logical step). Don't offer what they already picked.
   Never list options as a./b./1./2. in the text — option labels must be the full words (e.g. a title name).
 - SHELF TRUTH: a title is on the user's shelf ONLY if it appears in the "User Shelf" list or is marked "ON USER'S SHELF: yes" below. Otherwise never say they have it, watched it, or completed it.
-- When the user asks to show/open a title, give its details (premise, type, episodes/chapters, score) from the lookup; if it's not on their shelf, say so and suggest adding it.
-- Never write URLs or page paths like /library; the app shows buttons for navigation.
+- When the user asks to show/open a title, give its details (premise, type, episodes/chapters, score) from the lookup. If it's not on their shelf, say they can tap the ➕ Add button below (it's right here in chat). Don't add OPTIONS for adding.
+- Never tell the user to go to another page to add or open something, and never write URLs or page paths; the buttons under your message handle that.
+- If the user misspells a title, silently use the correct title from the lookup.{" The user wants to add a title: confirm which title in one short sentence and ask for their status (plan to watch, watching, completed, on hold, dropped). Don't ask anything else." if add_request and lookup_results else ""}
 
 ### CURRENT TURN
 {INTENT_GUIDE[intent]}
@@ -334,10 +427,11 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
 ### OTAKUVAULT APP CHEAT SHEET:
 - **Clean Mode (SFW)**: Mainstream anime & manga only. Hides all 18+ adult titles and adult gallery art.
 - **Creamy Mode (18+)**: Unlocks adult manhwa, the Top Rated community chart (#1-#100), and adult gallery art.
-- **Library (`/`)**: Track titles (Watching, Completed, Plan to watch, On hold, Dropped), log progress, ratings (1-10★), and notes.
-- **Top Rated (`/community-lists`)**: Community top-100 manhwa ranking (Creamy mode only).
-- **Gallery (`/gallery`)**: Browse and save high-res art & panels.
-- **Import (`/import`)**: Import watchlists from AniList or JSON.
+- **Library**: Track titles (Watching, Completed, Plan to watch, On hold, Dropped), log progress, ratings (1-10★), and notes.
+- **Adding titles**: Ask Kimetsu to show a title, then tap ➕ Add — Kimetsu asks status/progress and saves it.
+- **Top Rated**: Community top-100 manhwa ranking (Creamy mode only).
+- **Gallery**: Browse and save high-res art & panels.
+- **Import**: Import watchlists from AniList or JSON.
 - **Shortcuts**: Ctrl+K opens this chat; trash icon clears chat history.
 
 {context_str}"""
@@ -386,6 +480,7 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
             reply_text = re.sub(options_re, "", raw_reply, flags=re.DOTALL | re.IGNORECASE).strip()
         else:
             reply_text = raw_reply
+        reply_text = APP_PATH_RE.sub("the app", reply_text)
 
         # If the model asked a question but forgot options, derive them from what was retrieved
         if not options and reply_text.rstrip().endswith("?") and retrieved_docs:
@@ -406,10 +501,6 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
                 "actionType": "message",
                 "title": opt,
             })
-
-        for r in lookup_results[:2]:
-            short = r["title"][:22] + "…" if len(r["title"]) > 22 else r["title"]
-            actions.append({"label": f"View {short} on AniList", "title": r["title"], "url": r["url"], "actionType": "link"})
 
         # 2. Add media title "Open <Title>" buttons if titles are mentioned
         seen_titles = set()
@@ -472,6 +563,8 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
             "reply": reply_text,
             "actions": actions,
             "retrievedCount": len(retrieved_docs),
+            "lookups": lookup_results[:2],
+            "addRequest": add_request and bool(lookup_results),
         }
 
 

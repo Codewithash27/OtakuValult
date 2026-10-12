@@ -261,7 +261,7 @@ class RAGService:
 ### HOW TO RESPOND
 - Reply to what the user actually said, in fresh wording every time. Never reuse canned phrases or repeat a previous reply.
 - Keep it short: 1-4 sentences or up to 4 brief bullets. Bold every title, e.g. **Solo Leveling**.
-- Only recommend titles from the knowledge base or shelf below; if nothing fits, say so and ask to narrow down.
+- Prefer titles from the knowledge base or shelf below. If none fit (e.g. mainstream anime), recommend well-known real titles you're confident exist — never invent titles.
 - For recommendations give 2-4 picks, each with a one-line reason tied to the user's request.
 - When you ask the user a question or a choice helps, end with ONE line: [OPTIONS: a | b | c]
   2-4 options, max 4 words each, specific to THIS conversation (e.g. genres they hinted at, titles you just mentioned, the next logical step). Don't offer what they already picked.

@@ -5,6 +5,7 @@ import { useMediaItems } from '../hooks/useMediaItems'
 import { AnimeMascot } from './AnimeMascot'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
 import { MediaItem, MediaType, STATUS_LABELS } from '../types/media'
+import { apiUrl } from '../lib/api'
 
 const TYPE_WORDS: Record<string, MediaType> = {
   anime: 'anime', manga: 'manga', manhwa: 'manhwa', webtoon: 'manhwa', pornhwa: 'manhwa',
@@ -125,7 +126,7 @@ export function LibraryAssistant() {
       }))
 
       try {
-        const res = await fetch('/api/chat', {
+        const res = await fetch(apiUrl('/api/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

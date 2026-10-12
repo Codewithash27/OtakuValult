@@ -55,6 +55,11 @@ LOOKUP_RE = re.compile(
     r"(?P<q>.+?)(?:\s+(?P<t>anime|manga|manhwa|webtoon|series|show))?\s*[?.!]*$",
     re.I,
 )
+FALLBACK_REPLY_RE = re.compile(
+    r"^(I can help with your shelf & catalogue|Your shelf is empty right now|I can't reach my AI server|"
+    r"My AI brain isn't connected|The AI server hit an error|_Stopped\._)",
+    re.I,
+)
 ADD_REF_RE = re.compile(r"\b(add|have|track|save|put)\b.*\b(it|this|that|this\s+one|that\s+one|them)\b", re.I)
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 APP_PATH_RE = re.compile(r"`?(?<![\w.])/(?:library|anime|manga|manhwa|gallery|import|community-lists)\b`?")
@@ -438,9 +443,18 @@ Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, character
 {context_str}"""
 
         api_messages = [{"role": "system", "content": system_prompt}]
-        for m in messages[-8:]:
-            if m.get("role") in ("user", "assistant") and m.get("content"):
-                api_messages.append({"role": m["role"], "content": m["content"][:700]})
+        seen_replies: set[str] = set()
+        for m in messages[-10:]:
+            role, content = m.get("role"), (m.get("content") or "").strip()
+            if role not in ("user", "assistant") or not content:
+                continue
+            if role == "assistant":
+                # Offline-fallback replies and repeats in stored history make the model parrot them
+                key_text = content[:120].lower()
+                if FALLBACK_REPLY_RE.search(content) or key_text in seen_replies:
+                    continue
+                seen_replies.add(key_text)
+            api_messages.append({"role": role, "content": content[:700]})
 
         payload = {
             "model": CHAT_MODEL,

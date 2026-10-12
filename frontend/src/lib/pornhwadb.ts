@@ -48,6 +48,15 @@ export async function getPornhwadbSeries(slug: string): Promise<PornhwaSeries> {
   return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}`)
 }
 
+export type SimilarSeries = Pick<PornhwaSeries, 'slug' | 'title' | 'coverImage' | 'averageRating' | 'tags'>
+
+export async function getPornhwadbSimilar(
+  slug: string,
+  limit = 10,
+): Promise<{ storyline: SimilarSeries[]; sharedTags: SimilarSeries[] }> {
+  return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}/similar?limit=${limit}`)
+}
+
 export function proxiedPornhwaCover(url: string): string {
   return apiUrl(`/api/images/proxy?url=${encodeURIComponent(url)}`)
 }

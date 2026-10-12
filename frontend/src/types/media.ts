@@ -26,6 +26,16 @@ export function anilistId(item: Pick<MediaItem, 'source' | 'external_id'>): numb
   return match ? Number(match[1]) : null
 }
 
+/** Read-only details page for a shelf item, or null when it has no catalogue/AniList source to show. */
+export function detailHref(item: Pick<MediaItem, 'source' | 'external_id' | 'media_type'>): string | null {
+  if (item.source === 'pornhwadb' && item.external_id) {
+    return `/community-lists/series/${encodeURIComponent(item.external_id)}`
+  }
+  const id = anilistId(item)
+  if (id !== null) return `/title/${item.media_type === 'anime' ? 'anime' : 'manga'}/${id}`
+  return null
+}
+
 export const STATUS_LABELS: Record<Status, string> = {
   watching: 'Watching',
   completed: 'Completed',

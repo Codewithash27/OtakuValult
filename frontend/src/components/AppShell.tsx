@@ -85,7 +85,7 @@ export function AppShell() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const isDetailPage = pathname.startsWith('/title/')
+  const isDetailPage = pathname.startsWith('/title/') || pathname.startsWith('/community-lists/series/')
   const [contentMode] = useContentMode()
   const navVisible = NAV_ITEMS.filter((item) => !item.disabled && (!item.creamyOnly || contentMode === 'creamy'))
 

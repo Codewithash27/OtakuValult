@@ -1,12 +1,25 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addPornhwadbToShelf } from '../lib/addPornhwadbItem'
-import { formatRatingOutOf5, chartCoverUrl } from '../lib/manhwaCharts'
-import { getPornhwadbSeries, type PornhwaSeries } from '../lib/pornhwadb'
+import { chartCoverUrl } from '../lib/manhwaCharts'
+import { getPornhwadbSeries, getPornhwadbSimilar, type PornhwaSeries, type SimilarSeries } from '../lib/pornhwadb'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { STATUS_LABELS } from '../types/media'
 import { useToast } from './Toast'
+import {
+  BackPill,
+  CoverCard,
+  CoverRow,
+  DetailHero,
+  HeroBadge,
+  InfoRow,
+  ScoreTile,
+  Section,
+  Stat,
+  Synopsis,
+  TagChips,
+} from './TitleDetailParts'
 
 type Props = {
   slug: string
@@ -18,11 +31,25 @@ function cleanSynopsis(raw: string | null | undefined): string {
   return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-export function MetaPill({ children }: { children: React.ReactNode }) {
+const seriesHref = (slug: string | null | undefined) => `/community-lists/series/${encodeURIComponent(slug || '')}`
+
+function SimilarRow({ title, items }: { title: string; items: SimilarSeries[] }) {
+  if (!items.length) return null
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-900/5 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-white/10">
-      {children}
-    </span>
+    <Section title={title}>
+      <CoverRow>
+        {items.map((s) => (
+          <CoverCard
+            key={s.slug}
+            to={seriesHref(s.slug)}
+            image={chartCoverUrl(s.coverImage)}
+            title={s.title}
+            badge={s.averageRating ? `★ ${Number(s.averageRating).toFixed(1)}` : undefined}
+            subtitle={s.tags.slice(0, 2).join(' · ')}
+          />
+        ))}
+      </CoverRow>
+    </Section>
   )
 }
 
@@ -38,6 +65,13 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
     queryKey: ['pornhwadb-series', slug],
     queryFn: () => getPornhwadbSeries(slug),
     staleTime: 30 * 60 * 1000,
+  })
+
+  const similar = useQuery({
+    queryKey: ['pornhwadb-similar', slug],
+    queryFn: () => getPornhwadbSimilar(slug, 10),
+    staleTime: 30 * 60 * 1000,
+    enabled: !!series.data,
   })
 
   const shelfItem = useMemo(() => {
@@ -64,8 +98,12 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
 
   if (series.isLoading) {
     return (
-      <div className="max-w-4xl mx-auto py-16 grid place-items-center">
-        <div className="w-48 aspect-[3/4] rounded-2xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />
+      <div className="max-w-6xl mx-auto space-y-6 pb-8">
+        <div className="h-[340px] rounded-3xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />
+        <div className="grid lg:grid-cols-[1fr_300px] gap-6">
+          <div className="h-48 rounded-2xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />
+          <div className="h-48 rounded-2xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />
+        </div>
       </div>
     )
   }
@@ -74,158 +112,168 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
     return (
       <div className="text-center py-12 space-y-3">
         <p className="text-rose-500 text-sm">{(series.error as Error)?.message ?? 'Not found'}</p>
-        <Link to={backHref} className="text-violet-500 text-sm font-semibold hover:underline">
+        <button type="button" onClick={() => navigate(backHref)} className="text-violet-500 text-sm font-semibold hover:underline">
           ← Back to list
-        </Link>
+        </button>
       </div>
     )
   }
 
   const row = series.data
   const cover = chartCoverUrl(row.coverImage)
-  const ratings =
-    row.totalRatings === 1 ? '1 rating' : `${(row.totalRatings ?? 0).toLocaleString()} ratings`
   const synopsis = cleanSynopsis(row.description)
-  const longSynopsis = synopsis.length > 420
+  const rating = row.averageRating != null ? Number(row.averageRating) : null
+  const ratingCount = row.totalRatings ?? 0
+  const links = row.externalLinks.filter((l) => l.url)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-up pb-8">
-      <Link to={backHref} className="text-sm text-violet-500 font-semibold hover:underline inline-flex items-center gap-1">
-        ← Back to top rated
-      </Link>
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-up pb-10">
+      <DetailHero backdrop={cover} sharp={false}>
+        <BackPill to={backHref} />
 
-      <article className="glass-strong rounded-3xl overflow-hidden">
-        <div className="p-5 sm:p-8">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
-            <div className="w-[200px] sm:w-[220px] mx-auto md:mx-0 shrink-0">
-              <div className="relative rounded-2xl overflow-hidden ring-1 ring-black/10 dark:ring-white/15 shadow-2xl shadow-violet-950/20 group">
-                {cover ? (
-                  <img src={cover} alt="" className="w-full aspect-[2/3] object-cover bg-slate-900" />
-                ) : (
-                  <div className="aspect-[2/3] grid place-items-center text-4xl bg-slate-800 text-slate-600">📖</div>
-                )}
-                {shelfItem && (
-                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-950/85 text-emerald-300 border border-emerald-500/40 backdrop-blur-md shadow-lg flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    In Vault
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 min-w-0 w-full space-y-4">
-              <header>
-                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400">
-                    Manhwa · 18+
-                  </p>
-                  {shelfItem && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      In Vault · {STATUS_LABELS[shelfItem.status] || 'Tracked'}
-                    </span>
-                  )}
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-bold font-display leading-tight text-slate-900 dark:text-white">
-                  {row.title}
-                </h1>
-                {row.alternativeTitles.length > 0 && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                    {row.alternativeTitles.slice(0, 4).join(' · ')}
-                  </p>
-                )}
-              </header>
-
-              <div className="flex flex-wrap gap-2">
-                {shelfItem && (
-                  <MetaPill>
-                    <span className="text-emerald-500 font-semibold mr-1">Your Vault:</span>
-                    {STATUS_LABELS[shelfItem.status]}
-                    {shelfItem.progress != null ? ` (${shelfItem.progress}${row.totalChapters ? `/${row.totalChapters}` : ''} ch)` : ''}
-                    {shelfItem.rating ? ` · ${shelfItem.rating}/10★` : ''}
-                  </MetaPill>
-                )}
-                <MetaPill>{formatRatingOutOf5(row.averageRating)}</MetaPill>
-                <MetaPill>{ratings}</MetaPill>
-                {row.totalChapters != null && (
-                  <MetaPill>
-                    {row.totalChapters} ch
-                  </MetaPill>
-                )}
-                {row.releaseYear != null && <MetaPill>{row.releaseYear}</MetaPill>}
-                {row.status && <MetaPill>{row.status}</MetaPill>}
-              </div>
-
-              {row.tags.length > 0 && (
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
-                    Tags
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {shelfItem && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 inline-flex items-center gap-1 shadow-sm shadow-emerald-950/20">
-                        ✓ In Vault
-                      </span>
-                    )}
-                    {row.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-violet-500/12 text-violet-700 dark:text-violet-200 border border-violet-500/25"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+        <div className="relative flex flex-col sm:flex-row gap-6 sm:gap-7 p-5 sm:p-7 pt-16 sm:pt-14">
+          <div className="w-36 sm:w-40 lg:w-44 shrink-0 mx-auto sm:mx-0">
+            <div className="relative rounded-2xl overflow-hidden ring-2 ring-white/15 shadow-2xl shadow-violet-950/40">
+              {cover ? (
+                <img src={cover} alt={row.title} className="w-full aspect-[2/3] object-cover bg-slate-900" />
+              ) : (
+                <div className="aspect-[2/3] grid place-items-center text-4xl bg-slate-800 text-slate-600">📖</div>
               )}
-
-              <div className="flex flex-wrap gap-2 pt-1">
-                {onShelf ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/manhwa?item=${onShelf}`)}
-                    className="btn-glow !py-2.5 !px-6 text-sm inline-flex items-center gap-1.5"
-                  >
-                    <span>Open in my list</span>
-                    <span className="text-xs opacity-75 font-normal">(Edit progress)</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={add.isPending}
-                    onClick={() => add.mutate(row)}
-                    className="btn-glow !py-2.5 !px-6 text-sm disabled:opacity-50"
-                  >
-                    {add.isPending ? 'Adding…' : '+ Add to my list'}
-                  </button>
-                )}
-              </div>
+              {onShelf && (
+                <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500 text-white shadow-lg">
+                  ✓ In Vault
+                </span>
+              )}
             </div>
           </div>
 
-          {synopsis && (
-            <section className="mt-8 pt-6 border-t border-slate-200/80 dark:border-white/10">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white mb-2">Synopsis</h2>
-              <p
-                className={`text-sm text-slate-600 dark:text-slate-300 leading-relaxed ${
-                  !synopsisOpen && longSynopsis ? 'line-clamp-5' : ''
-                }`}
-              >
-                {synopsis}
-              </p>
-              {longSynopsis && (
+          <div className="flex-1 min-w-0 flex flex-col justify-end gap-4 text-center sm:text-left">
+            <div>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-2">
+                <HeroBadge>Manhwa</HeroBadge>
+                <HeroBadge tone="adult">18+</HeroBadge>
+                {shelfItem && (
+                  <HeroBadge tone="vault">
+                    {STATUS_LABELS[shelfItem.status]} · {shelfItem.progress}
+                    {row.totalChapters ? `/${row.totalChapters}` : ''} ch
+                    {shelfItem.rating ? ` · ★${shelfItem.rating}` : ''}
+                  </HeroBadge>
+                )}
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-bold font-display leading-tight text-white drop-shadow-lg">{row.title}</h1>
+              {row.alternativeTitles.length > 0 && (
+                <p className="mt-1.5 text-sm text-white/60 truncate">{row.alternativeTitles.slice(0, 3).join(' · ')}</p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-6 gap-y-3">
+              {rating != null && ratingCount > 0 && <ScoreTile value={rating.toFixed(1)} outOf="/ 5" score100={rating * 20} />}
+              <Stat label="Ratings" value={ratingCount.toLocaleString()} />
+              {row.totalChapters != null && <Stat label="Chapters" value={row.totalChapters} />}
+              {row.releaseYear != null && <Stat label="Year" value={row.releaseYear} />}
+              {row.status && <Stat label="Status" value={row.status} />}
+            </div>
+
+            {row.tags.length > 0 && (
+              <div className="flex flex-wrap justify-center sm:justify-start gap-1.5">
+                {row.tags.slice(0, 5).map((g) => (
+                  <span key={g} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 text-white border border-white/15 backdrop-blur-sm">
+                    {g}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+              {onShelf ? (
+                <button type="button" onClick={() => navigate(`/manhwa?item=${onShelf}`)} className="btn-glow !py-2.5 !px-6 text-sm">
+                  ✎ Edit in my list
+                </button>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setSynopsisOpen((o) => !o)}
-                  className="mt-2 text-xs font-semibold text-violet-500 hover:underline"
+                  disabled={add.isPending}
+                  onClick={() => add.mutate(row)}
+                  className="btn-glow !py-2.5 !px-6 text-sm disabled:opacity-50"
                 >
-                  {synopsisOpen ? 'Show less' : 'Read more'}
+                  {add.isPending ? 'Adding…' : '+ Add to my list'}
                 </button>
               )}
-            </section>
-          )}
+              {links[0] && (
+                <a
+                  href={links[0].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/10 border border-white/20 hover:bg-white/20 transition-colors"
+                >
+                  Read on {links[0].siteName || 'site'} ↗
+                </a>
+              )}
+            </div>
+          </div>
         </div>
-      </article>
+      </DetailHero>
+
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
+        <div className="space-y-6 min-w-0">
+          {synopsis && <Synopsis text={synopsis} open={synopsisOpen} onToggle={() => setSynopsisOpen((o) => !o)} />}
+
+          {similar.isLoading && <div className="h-56 rounded-2xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />}
+          <SimilarRow title="Similar storyline" items={similar.data?.storyline ?? []} />
+          <SimilarRow title="Shares these tags" items={similar.data?.sharedTags ?? []} />
+        </div>
+
+        <aside className="space-y-6 lg:sticky lg:top-4">
+          <Section title="Details">
+            <dl>
+              <InfoRow label="Type" value="Manhwa · 18+" />
+              <InfoRow label="Chapters" value={row.totalChapters} />
+              <InfoRow label="Status" value={row.status} />
+              <InfoRow label="Released" value={row.releaseYear} />
+              <InfoRow label="Rating" value={rating != null && ratingCount > 0 ? `${rating.toFixed(2)} / 5` : 'Not rated yet'} />
+              <InfoRow label="Ratings" value={ratingCount.toLocaleString()} />
+              {shelfItem && <InfoRow label="Your status" value={STATUS_LABELS[shelfItem.status]} />}
+            </dl>
+          </Section>
+
+          {row.tags.length > 0 && (
+            <Section title="Tags">
+              <TagChips tags={row.tags.map((name) => ({ name }))} />
+            </Section>
+          )}
+
+          {row.alternativeTitles.length > 0 && (
+            <Section title="Also known as">
+              <ul className="space-y-1">
+                {row.alternativeTitles.map((t) => (
+                  <li key={t} className="text-xs text-slate-600 dark:text-slate-300">
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {links.length > 0 && (
+            <Section title="Where to read">
+              <div className="flex flex-col gap-2">
+                {links.map((l) => (
+                  <a
+                    key={l.url}
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold bg-violet-500/10 text-violet-700 dark:text-violet-200 border border-violet-500/20 hover:bg-violet-500/20"
+                  >
+                    {l.siteName || new URL(l.url!).hostname}
+                    <span>↗</span>
+                  </a>
+                ))}
+              </div>
+            </Section>
+          )}
+        </aside>
+      </div>
     </div>
   )
 }

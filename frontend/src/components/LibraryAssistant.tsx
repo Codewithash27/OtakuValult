@@ -4,7 +4,7 @@ import { ChatWidget, type AdapterReply, type ChatAdapter, type ChatMessage } fro
 import { useMediaItems } from '../hooks/useMediaItems'
 import { AnimeMascot } from './AnimeMascot'
 import { useContentMode, useIsAdult } from '../hooks/useAdultFilter'
-import { MediaItem, MediaType, STATUS_LABELS, anilistId, type Status } from '../types/media'
+import { MediaItem, MediaType, STATUS_LABELS, detailHref, type Status } from '../types/media'
 import { apiUrl } from '../lib/api'
 import { useAddItem } from '../hooks/useMediaMutations'
 
@@ -78,16 +78,7 @@ export function LibraryAssistant() {
       return `/title/${prefix === 'anime' ? 'anime' : 'manga'}/${num}`
     }
 
-    const openItem = (i: MediaItem) => {
-      const alId = anilistId(i)
-      if (i.source === 'pornhwadb' && i.external_id) {
-        navigate(`/community-lists/series/${encodeURIComponent(i.external_id)}`)
-      } else if (alId !== null) {
-        navigate(`/title/${i.media_type === 'anime' ? 'anime' : 'manga'}/${alId}`)
-      } else {
-        navigate(`/?item=${encodeURIComponent(i.id)}`)
-      }
-    }
+    const openItem = (i: MediaItem) => navigate(detailHref(i) ?? `/?item=${encodeURIComponent(i.id)}`)
 
     const openShelfItem = (i: MediaItem) => ({
       label: `Open ${shortTitle(i.title)}`,
@@ -321,7 +312,7 @@ export function LibraryAssistant() {
       if (flowReply) return stream(flowReply)
 
       // Prepare shelf snapshot for context
-      const shelfPayload = currentShelf.slice(0, 40).map((i) => ({
+      const shelfPayload = currentShelf.slice(0, 400).map((i) => ({
         id: i.id,
         title: i.title,
         media_type: i.media_type,
@@ -422,7 +413,14 @@ export function LibraryAssistant() {
           }
         }
 
-        return { actions: [...lookupActions(lookups, sendUserMessage), ...actions] }
+        const seenLabels = new Set<string>()
+        const merged = [...lookupActions(lookups, sendUserMessage), ...actions].filter((a) => {
+          const k = a.label.toLowerCase()
+          if (seenLabels.has(k)) return false
+          seenLabels.add(k)
+          return true
+        })
+        return { actions: merged }
       } catch (err: any) {
         // Fallback gracefully to local adapter rules if backend is unreachable or offline
         if (signal.aborted) return

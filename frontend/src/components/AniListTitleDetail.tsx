@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { anilist } from '../lib/importers'
 import { cleanMediaDescription } from '../lib/mediaDescription'
@@ -8,6 +8,7 @@ import { useAddItem } from '../hooks/useMediaMutations'
 import { STATUS_LABELS, anilistId, type MediaType } from '../types/media'
 import { useToast } from './Toast'
 import { WatchLinks } from './WatchLinks'
+import { CoverCard, InfoRow, Section, Stat, scoreTone } from './TitleDetailParts'
 
 type Kind = 'anime' | 'manga'
 
@@ -67,63 +68,8 @@ const nodeTitle = (n: MediaNode) => n.title.english || n.title.romaji || 'Untitl
 const nodeHref = (n: MediaNode) => `/title/${n.type === 'ANIME' ? 'anime' : 'manga'}/${n.id}`
 const compact = (n: number) => Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
 
-function scoreTone(score: number) {
-  if (score >= 80) return 'from-emerald-400 to-teal-500'
-  if (score >= 70) return 'from-amber-300 to-orange-500'
-  return 'from-rose-400 to-pink-500'
-}
-
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
-      <p className="text-sm font-bold text-white truncate">{value}</p>
-    </div>
-  )
-}
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === '') return null
-  return (
-    <div className="flex items-start justify-between gap-3 py-2 border-b border-slate-200/70 dark:border-white/[0.06] last:border-0">
-      <dt className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{label}</dt>
-      <dd className="text-xs font-semibold text-slate-800 dark:text-slate-100 text-right">{value}</dd>
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="glass-strong rounded-2xl p-5">
-      <h2 className="text-sm font-bold text-slate-900 dark:text-white mb-3">{title}</h2>
-      {children}
-    </section>
-  )
-}
-
 function MiniCard({ node, badge }: { node: MediaNode; badge?: string }) {
-  return (
-    <Link to={nodeHref(node)} className="group block w-[118px] shrink-0 snap-start">
-      <div className="relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 aspect-[2/3] bg-slate-800">
-        {node.coverImage.large && (
-          <img
-            src={node.coverImage.large}
-            alt=""
-            loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        )}
-        {badge && (
-          <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm">
-            {badge}
-          </span>
-        )}
-      </div>
-      <p className="mt-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2 leading-snug group-hover:text-violet-500 transition-colors">
-        {nodeTitle(node)}
-      </p>
-    </Link>
-  )
+  return <CoverCard to={nodeHref(node)} image={node.coverImage.large} title={nodeTitle(node)} badge={badge} />
 }
 
 export function AniListTitleDetail({ kind, id }: { kind: Kind; id: number }) {

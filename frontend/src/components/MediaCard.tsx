@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { MediaItem } from '../types/media'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { MediaItem, detailHref } from '../types/media'
 import { useDeleteItem } from '../hooks/useMediaMutations'
 import { useToast } from './Toast'
 import { PosterImage } from './PosterImage'
@@ -15,6 +15,7 @@ interface MediaCardProps {
 
 export function MediaCard({ item }: MediaCardProps) {
   const [, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const { mutate: deleteItem, isPending: isDeleting } = useDeleteItem()
   const { showToast } = useToast()
@@ -25,6 +26,12 @@ export function MediaCard({ item }: MediaCardProps) {
       next.set('item', item.id)
       return next
     })
+  }
+
+  const handleOpen = () => {
+    const href = detailHref(item)
+    if (href) navigate(href)
+    else handleOpenDrawer()
   }
 
   const handleDelete = () => {
@@ -62,7 +69,7 @@ export function MediaCard({ item }: MediaCardProps) {
     <>
       <div
         className="card-3d card-ring glass rounded-2xl overflow-hidden cursor-pointer group"
-        onClick={handleOpenDrawer}
+        onClick={handleOpen}
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
       >

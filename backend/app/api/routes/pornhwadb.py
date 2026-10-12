@@ -62,6 +62,61 @@ async def pornhwadb_series(slug: str) -> dict:
     return row
 
 
+@router.get("/pornhwadb/series/{slug}/similar")
+async def pornhwadb_series_similar(slug: str, limit: int = Query(10, ge=1, le=20)) -> dict:
+    """Similar storyline (RAG embeddings) and shared-tag titles for a catalogue series."""
+    if not phdb.is_configured():
+        raise HTTPException(status_code=503, detail="PornhwaDB export not configured")
+    target = phdb.get_series(slug)
+    if not target:
+        raise HTTPException(status_code=404, detail="Series not found in export")
+
+    def card(row: dict) -> dict:
+        return {
+            "slug": row.get("slug"),
+            "title": row.get("title"),
+            "coverImage": row.get("coverImage"),
+            "averageRating": row.get("averageRating"),
+            "tags": (row.get("tags") or [])[:3],
+        }
+
+    storyline: list[dict] = []
+    from app.services.rag_service import rag_service
+
+    if rag_service._ensure_index_loaded() and rag_service._embeddings is not None and rag_service._metadata:
+        meta = rag_service._metadata
+        idx = next((i for i, m in enumerate(meta) if str(m.get("slug") or "").lower() == slug.lower()), None)
+        if idx is not None:
+            scores = rag_service._embeddings @ rag_service._embeddings[idx]
+            for j in scores.argsort()[::-1]:
+                if int(j) == idx:
+                    continue
+                row = phdb.get_series(str(meta[int(j)].get("slug") or ""))
+                if row:
+                    storyline.append(card(row))
+                if len(storyline) >= limit:
+                    break
+
+    seen = {slug.lower(), *(s["slug"].lower() for s in storyline if s.get("slug"))}
+    target_tags = {t.lower() for t in target.get("tags") or []}
+    tagged: list[tuple[float, dict]] = []
+    if target_tags:
+        for row in phdb.search_all_public():
+            s = str(row.get("slug") or "").lower()
+            if s in seen:
+                continue
+            tags = {t.lower() for t in row.get("tags") or []}
+            overlap = len(tags & target_tags)
+            if overlap:
+                jaccard = overlap / len(tags | target_tags)
+                tagged.append((jaccard + (row.get("averageRating") or 0) * 0.02, row))
+    tagged.sort(key=lambda x: x[0], reverse=True)
+    shared = [card(r) for _, r in tagged[:limit]]
+
+    register_search_image_urls([c["coverImage"] for c in storyline + shared if c.get("coverImage")])
+    return {"storyline": storyline, "sharedTags": shared}
+
+
 @router.get("/pornhwadb/series/{slug}/images")
 async def pornhwadb_series_images(slug: str) -> dict:
     if not phdb.is_configured():

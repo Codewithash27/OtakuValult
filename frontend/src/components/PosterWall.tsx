@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { MediaItem } from '../types/media'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { MediaItem, detailHref } from '../types/media'
 import { PosterImage } from './PosterImage'
 import { StatusBadge } from './StatusBadge'
 
@@ -62,6 +62,7 @@ function WallPoster({ item, onHover, onOpen }: { item: MediaItem; onHover: (i: M
 
 export function PosterWall({ items, onClose }: PosterWallProps) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [width, setWidth] = useState(() => window.innerWidth)
   const [focused, setFocused] = useState<MediaItem | null>(null)
   const [tilted, setTilted] = useState(true)
@@ -79,12 +80,18 @@ export function PosterWall({ items, onClose }: PosterWallProps) {
     return () => document.body.classList.remove('cinema-open')
   }, [])
 
-  const open = (item: MediaItem) =>
+  const open = (item: MediaItem) => {
+    const href = detailHref(item)
+    if (href) {
+      navigate(href)
+      return
+    }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.set('item', item.id)
       return next
     })
+  }
 
   const shuffle = () => {
     if (!items.length) return

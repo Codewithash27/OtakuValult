@@ -375,6 +375,11 @@ def search_series(query: str, *, limit: int = 25) -> list[dict[str, Any]]:
     return matches
 
 
+def search_all_public() -> list[dict[str, Any]]:
+    cat = _catalogue()
+    return [_public_series(s) for s in (cat or {}).get("pornhwa") or []]
+
+
 def _find_series_raw(slug: str) -> dict[str, Any] | None:
     cat = _catalogue()
     if not cat or not slug.strip():

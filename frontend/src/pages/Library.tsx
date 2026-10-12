@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMediaItems } from '../hooks/useMediaItems'
-import { MediaItem, MediaType, Status } from '../types/media'
+import { MediaItem, MediaType, Status, detailHref } from '../types/media'
 import { MediaCard } from '../components/MediaCard'
 import { MediaRow } from '../components/MediaRow'
 import { FilterChips } from '../components/FilterChips'
@@ -33,6 +33,7 @@ const splitParam = (v: string | null) => (v ? v.split(',').filter(Boolean) : [])
 
 export default function Library({ fixedType }: { fixedType?: MediaType }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [sort, setSort] = useState<SortOption>('recent')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -175,12 +176,18 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
       return next
     })
 
-  const openItem = (item: MediaItem) =>
+  const openItem = (item: MediaItem) => {
+    const href = detailHref(item)
+    if (href) {
+      navigate(href)
+      return
+    }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.set('item', item.id)
       return next
     })
+  }
 
   const handleStatusChange = (newStatus: Status | 'all') => {
     setSearchParams((prev) => {

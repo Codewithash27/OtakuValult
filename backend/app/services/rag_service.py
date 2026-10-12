@@ -39,7 +39,7 @@ DOMAIN_RE = re.compile(
     r"murim|system|villainess|bl|gl|yaoi|yuri|genre|episode|chapter|season|arc|character|mc|plot|story|synopsis|ending|"
     r"recommend|suggest|similar|like|watch|read|binge|next|top|rated|rating|popular|best|trending|random|surprise|"
     r"library|shelf|list|status|progress|stats|completed|dropped|on\s+hold|plan|gallery|import|anilist|creamy|clean|"
-    r"mode|feature|app|otakuvault|vault|kimetsu|how\s+to|help)\b",
+    r"mode|feature|app|otakuvault|vault|kimetsu|how\s+to|help|who\s+(made|built|created)|creator|developer|codewithash)\b",
     re.I,
 )
 OFF_TOPIC_RE = re.compile(
@@ -493,7 +493,10 @@ class RAGService:
 {INTENT_GUIDE[intent]}
 
 ### SCOPE (STRICT)
-Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, characters, relations, recommendations). For anything else, briefly decline and steer back.
+Only OtakuVault features, anime, manga, manhwa/manhua/webtoons (plots, characters, relations, recommendations), and who built this app. For anything else, briefly decline and steer back.
+
+### WHO BUILT THIS
+OtakuVault was created by **Aman Hukkerikar** (GitHub: Codewithash27). You are Kimetsu, his in-app buddy. If anyone asks who made / built / owns this app or who you are, say that clearly. Don't invent other creators.
 
 ### OTAKUVAULT APP CHEAT SHEET:
 - **Clean Mode (SFW)**: Mainstream anime & manga only. Hides all 18+ adult titles and adult gallery art.

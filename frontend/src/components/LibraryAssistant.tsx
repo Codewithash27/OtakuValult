@@ -268,6 +268,12 @@ export function LibraryAssistant() {
         }
       }
 
+      if (/who (made|built|created|owns)|who'?s (the )?(creator|developer|author|owner)|made (this|otakuvault)|built (this|otakuvault)|your (creator|maker|developer)|whose (app|project)|about (the )?(dev|developer|creator)/.test(lower)) {
+        return {
+          content: `OtakuVault was built by **Aman Hukkerikar** ([Codewithash27](https://github.com/Codewithash27)). I'm **Kimetsu**, his in-app buddy.`,
+        }
+      }
+
       if (/what is this app|how to use|features|about app|guide|walkthrough/.test(lower)) {
         return {
           content: `### Welcome to OtakuVault!\nI'm **Kimetsu**, your personal otaku companion. Here is what you can do:\n- **📚 Library**: Track what you're watching or reading, record episode/chapter progress, rate titles (1-10★), and keep notes.\n- **⛩️ Categories**: Filter your shelf by Anime, Manga, or Manhwa.\n- **⭐ Top Rated**: Browse the top-100 rated manhwa with scores and tags (in Creamy mode).\n- **🖼️ Gallery**: Save and explore high-res anime art and manga panels.\n- **⬆️ Import**: Sync your watchlists from AniList or JSON exports.\n- **💬 Kimetsu (Ctrl+K)**: Ask me for recommendations, plot synopses, and shelf stats!`

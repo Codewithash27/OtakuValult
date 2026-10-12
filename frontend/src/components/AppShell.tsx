@@ -78,7 +78,7 @@ function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
               }
             }}
             disabled={item.disabled}
-            className={`group relative w-full text-left px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-3 font-medium ${
+            className={`group relative w-full text-left px-3 py-2 rounded-xl transition-all duration-300 flex items-center gap-3 text-sm font-medium ${
               item.disabled
                 ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
                 : active
@@ -200,6 +200,14 @@ export function AppShell() {
                 Logout
               </button>
             </div>
+            <a
+              href="https://github.com/Codewithash27"
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-[11px] text-slate-500 dark:text-slate-400 hover:text-lantern-400"
+            >
+              Built by Codewithash27
+            </a>
           </div>
         )}
       </header>
@@ -207,53 +215,60 @@ export function AppShell() {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:w-72 sticky top-0 h-screen p-4">
         <div className="glass rounded-3xl flex flex-col w-full overflow-hidden">
-          <div className="p-6 pb-4">
+          <div className="px-5 pt-5 pb-3">
             <Logo size="lg" />
-            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              <span className="font-jp text-lantern-600 dark:text-lantern-300 mr-1.5">{GREETING_JP}</span>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-jp text-lantern-500 dark:text-lantern-300 mr-1">{GREETING_JP}</span>
               {greeting}
             </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-jp mr-1.5">オタク宝庫</span>your anime vault
-            </p>
           </div>
-          <div className="mx-6 h-px bg-gradient-to-r from-transparent via-lantern-500/40 to-transparent" />
-          <nav className="flex-1 p-4">
+          <div className="mx-5 h-px bg-gradient-to-r from-transparent via-lantern-500/40 to-transparent" />
+          <nav className="flex-1 px-3 py-3">
             <SidebarMenu />
           </nav>
-          <div className="px-4 space-y-2">
-            <button onClick={handleAddItem} className="group btn-glow w-full !rounded-xl !py-2.5 text-sm">
+          <div className="px-5 pb-2">
+            <button onClick={handleAddItem} className="group btn-glow w-full !rounded-xl !py-2 text-sm">
               <span className="text-lg leading-none transition-transform duration-300 group-hover:rotate-90">+</span> Add item
             </button>
-            <InstallAppButton />
+            <InstallAppButton className="!h-auto !border-0 !bg-transparent mt-1.5 !text-xs !font-medium text-slate-500 dark:text-slate-400 hover:!bg-transparent hover:text-lantern-400" />
           </div>
-          <div className="p-4 m-3 rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 space-y-3">
-            <button
-              type="button"
-              onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
-              className={`mode-pill w-full justify-center ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
-              title={
-                contentMode === 'creamy'
-                  ? 'Creamy: adult manhwa — tap for Clean (anime)'
-                  : 'Clean: anime shelf — tap for Creamy (manhwa)'
-              }
-            >
-              <span className="mode-knob">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
-              <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center font-bold text-white ring-2 ring-violet-500/30">
-                {initial}
-              </div>
-              <span className="text-sm text-slate-600 dark:text-slate-300 truncate flex-1">{user?.email}</span>
+          <div className="px-5 py-4 mt-1 border-t border-slate-200/70 dark:border-white/5 space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setContentMode(contentMode === 'creamy' ? 'clean' : 'creamy')}
+                className={`mode-pill flex-1 justify-center !h-8 ${contentMode === 'creamy' ? 'mode-creamy' : 'mode-clean'}`}
+                title={
+                  contentMode === 'creamy'
+                    ? 'Creamy: adult manhwa — tap for Clean (anime)'
+                    : 'Clean: anime shelf — tap for Creamy (manhwa)'
+                }
+              >
+                <span className="mode-knob !w-6 !h-6 text-sm">{contentMode === 'creamy' ? '🔥' : '🍃'}</span>
+                <span className="text-xs font-bold pr-1">{contentMode === 'creamy' ? 'Creamy' : 'Clean'}</span>
+              </button>
               <ThemeToggle />
             </div>
-            <button
-              onClick={handleLogout}
-              className="w-full px-3 py-2 text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors text-sm font-semibold"
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center text-xs font-bold text-white">
+                {initial}
+              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1">{user?.email}</span>
+              <button
+                onClick={handleLogout}
+                className="text-xs font-semibold text-rose-500 hover:text-rose-400 shrink-0"
+              >
+                Logout
+              </button>
+            </div>
+            <a
+              href="https://github.com/Codewithash27"
+              target="_blank"
+              rel="noreferrer"
+              className="block text-[10px] text-slate-500 dark:text-slate-500 hover:text-lantern-400"
             >
-              Logout
-            </button>
+              Built by Codewithash27
+            </a>
           </div>
         </div>
       </aside>

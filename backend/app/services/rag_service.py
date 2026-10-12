@@ -49,7 +49,7 @@ OFF_TOPIC_RE = re.compile(
     re.I,
 )
 LOOKUP_RE = re.compile(
-    r"^\s*(?:can\s+you\s+|please\s+)?(?:show|open|tell\s+me\s+about|tell\s+about|about|details?\s+(?:of|on|about)|"
+    r"^\s*(?:can\s+you\s+|please\s+)?(?:show|open|tell\s+me(?:\s+about)?|tell\s+about|about|explain|describe|details?\s+(?:of|on|about)|"
     r"info(?:rmation)?\s+(?:on|about)|what\s+is|who\s+is|search(?:\s+for)?|find|look\s+up|add|"
     r"i\s*'?\s*a?m\s+talking\s+about|talking\s+about|i\s+mean[t]?|i\s+said)\s+(?:me\s+)?(?:the\s+)?"
     r"(?P<q>.+?)(?:\s+(?P<t>anime|manga|manhwa|webtoon|series|show))?\s*[?.!]*$",
@@ -416,7 +416,8 @@ class RAGService:
 - SHELF TRUTH: a title is on the user's shelf ONLY if it appears in the "User Shelf" list or is marked "ON USER'S SHELF: yes" below. Otherwise never say they have it, watched it, or completed it.
 - When the user asks to show/open a title, give its details (premise, type, episodes/chapters, score) from the lookup. If it's not on their shelf, say they can tap the ➕ Add button below (it's right here in chat). Don't add OPTIONS for adding.
 - Never tell the user to go to another page to add or open something, and never write URLs or page paths; the buttons under your message handle that.
-- If the user misspells a title, silently use the correct title from the lookup.{" The user wants to add a title: confirm which title in one short sentence and ask for their status (plan to watch, watching, completed, on hold, dropped). Don't ask anything else." if add_request and lookup_results else ""}
+- If the user misspells a title, silently use the correct title from the lookup.
+- When a Live AniList lookup is given, take facts (episodes, year, score, plot) ONLY from it; never mix in details from other series.{" The user wants to add a title: confirm which title in one short sentence and ask for their status (plan to watch, watching, completed, on hold, dropped). Don't ask anything else." if add_request and lookup_results else ""}
 
 ### CURRENT TURN
 {INTENT_GUIDE[intent]}

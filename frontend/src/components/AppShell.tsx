@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
@@ -19,13 +19,24 @@ const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean
   { label: 'Import', icon: '⬆️', href: '/import' },
 ]
 
+const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({
+  left: `${(i * 37 + 11) % 100}%`,
+  top: `${(i * 53 + 23) % 100}%`,
+  '--d': `${12 + (i % 5) * 3}s`,
+  '--delay': `${(i * 1.7) % 9}s`,
+  '--x': `${((i % 4) - 1.5) * 50}px`,
+  '--y': `${-60 - (i % 3) * 40}px`,
+})) as CSSProperties[]
+
 function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
     <div className="flex items-center gap-3 select-none">
       <div className="relative w-10 h-10 shrink-0" style={{ perspective: 400 }}>
-        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 animate-[spin_8s_linear_infinite] blur-md opacity-70" />
-        <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-white shadow-lg">
-          O
+        <div className="absolute inset-0 rounded-[14px] bg-gradient-to-br from-lantern-400 via-vermilion-500 to-jade-400 animate-[spin_10s_linear_infinite] blur-md opacity-60" />
+        <div className="relative w-10 h-10 rounded-[14px] bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-lg text-white shadow-lg ring-1 ring-white/30">
+          <span className="absolute inset-x-1.5 top-1 h-px bg-white/40" />
+          <span className="absolute inset-x-1.5 bottom-1 h-px bg-black/20" />
+          宝
         </div>
       </div>
       <h1 className={`font-display font-bold ${size === 'lg' ? 'text-2xl' : 'text-xl'}`}>
@@ -61,11 +72,17 @@ function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
               item.disabled
                 ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
                 : active
-                  ? 'text-white bg-gradient-to-r from-violet-600/90 to-pink-600/80 shadow-[0_8px_30px_-8px_rgba(219,39,119,.6)]'
+                  ? 'nav-lantern translate-x-1'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5 hover:translate-x-1'
             }`}
           >
-            <span className="text-lg transition-transform duration-300 group-hover:scale-125">{item.icon}</span>
+            <span
+              className={`text-lg transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6 ${
+                active ? 'scale-110 drop-shadow-[0_0_8px_rgba(249,138,7,.7)]' : ''
+              }`}
+            >
+              {item.icon}
+            </span>
             <span>{item.label}</span>
             {item.disabled && (
               <span className="ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-60">
@@ -104,11 +121,19 @@ export function AppShell() {
   }
 
   const initial = (user?.email?.[0] || '?').toUpperCase()
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const GREETING_JP = hour < 12 ? 'おはよう' : hour < 18 ? 'こんにちは' : 'こんばんは'
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       <div className="aurora"><span /></div>
       <div className="aurora-grid" />
+      <div className="fireflies" aria-hidden>
+        {FIREFLIES.map((f, i) => (
+          <span key={i} style={f} />
+        ))}
+      </div>
 
       {/* Mobile header */}
       <header className="lg:hidden glass-strong border-x-0 border-t-0 sticky top-0 z-40">
@@ -152,9 +177,11 @@ export function AppShell() {
         <div className="glass rounded-3xl flex flex-col w-full overflow-hidden">
           <div className="p-6">
             <Logo size="lg" />
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your anime & media vault</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-jp text-lantern-600 dark:text-lantern-300 mr-1.5">オタク宝庫</span>your anime vault
+            </p>
           </div>
-          <div className="mx-6 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent" />
+          <div className="mx-6 h-px bg-gradient-to-r from-transparent via-lantern-500/40 to-transparent" />
           <nav className="flex-1 p-4">
             <SidebarMenu />
           </nav>
@@ -181,22 +208,26 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="hidden lg:flex sticky top-0 z-30 px-6 pt-4">
+        <header className="hidden lg:block sticky top-0 z-30 px-6 pt-3">
           <div
-            className={`glass rounded-2xl flex items-center w-full ${
-              isDetailPage ? 'max-w-6xl mx-auto p-2 gap-3' : 'p-3 gap-4'
+            className={`glass rounded-full flex items-center gap-3 p-1.5 pl-2 mx-auto shadow-[0_10px_40px_-20px_rgba(0,0,0,.8)] ${
+              isDetailPage ? 'max-w-6xl' : 'max-w-7xl'
             }`}
           >
-            <div className="flex-1">
+            <div className="flex-1 max-w-xl">
               <SearchBar onOpenManualAdd={handleAddItem} />
             </div>
-            <button onClick={handleAddItem} className={`btn-glow flex-shrink-0 ${isDetailPage ? '!py-2 !px-4 text-sm' : ''}`}>
-              <span className="text-lg leading-none">+</span> Add item
+            <span className="ml-auto hidden xl:block text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+              <span className="font-jp text-lantern-500/80 mr-1">{GREETING_JP}</span>
+              {greeting}
+            </span>
+            <button onClick={handleAddItem} className="group btn-glow !rounded-full !h-10 !py-0 !px-5 text-sm shrink-0 ml-auto xl:ml-0">
+              <span className="text-lg leading-none transition-transform duration-300 group-hover:rotate-90">+</span> Add item
             </button>
           </div>
         </header>
 
-        <div className="flex-1 p-4 lg:p-6">
+        <div key={pathname.split('/').slice(0, 3).join('/')} className="page-enter flex-1 p-4 lg:p-6">
           <Outlet />
         </div>
       </main>
@@ -207,11 +238,14 @@ export function AppShell() {
           <Link
             key={item.label}
             to={item.href}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-semibold transition-all ${
-              pathname === item.href ? 'text-violet-500 dark:text-violet-300 scale-110' : 'text-slate-500 dark:text-slate-400'
+            className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-semibold transition-all duration-300 ${
+              pathname === item.href ? 'text-lantern-500 dark:text-lantern-300 -translate-y-0.5' : 'text-slate-500 dark:text-slate-400'
             }`}
           >
-            <span className="text-lg">{item.icon}</span>
+            {pathname === item.href && (
+              <span className="absolute top-1 w-8 h-1 rounded-full bg-gradient-to-r from-lantern-400 to-vermilion-500 shadow-[0_0_10px_rgba(249,138,7,.8)]" />
+            )}
+            <span className={`text-lg transition-transform duration-300 ${pathname === item.href ? 'scale-125' : ''}`}>{item.icon}</span>
             <span>{item.label}</span>
           </Link>
         ))}

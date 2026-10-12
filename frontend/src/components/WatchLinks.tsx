@@ -150,7 +150,7 @@ export function WatchLinks({ item }: { item: MediaItem }) {
   const officialButtons: LinkButton[] = official.map((l) => ({
     name: l.language && l.language !== 'English' ? `${l.site} · ${l.language}` : l.site,
     url: l.url,
-    color: l.color ?? '#7c3aed',
+    color: l.color ?? '#dd6602',
   }))
   const searchButtons: LinkButton[] = PLATFORMS[item.media_type].map((p) => ({ name: p.name, url: p.url(item.title), color: p.color }))
 

@@ -45,9 +45,9 @@ export function IntroSplash() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(124,58,237,.35),transparent_60%)]" />
       <div className="relative flex flex-col items-center text-center px-6">
         <div className="intro-logo relative w-16 h-16 sm:w-20 sm:h-20 mb-4">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 blur-xl opacity-80 animate-[spin_6s_linear_infinite]" />
-          <div className="relative w-full h-full rounded-2xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-3xl sm:text-4xl shadow-2xl border border-white/20">
-            O
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-lantern-400 via-vermilion-500 to-jade-400 blur-xl opacity-80 animate-[spin_6s_linear_infinite]" />
+          <div className="relative w-full h-full rounded-2xl bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-3xl sm:text-4xl shadow-2xl border border-white/30">
+            宝
           </div>
         </div>
         <h1 className="intro-title font-display font-bold text-5xl sm:text-7xl tracking-tight drop-shadow-[0_6px_40px_rgba(168,85,247,.6)]">

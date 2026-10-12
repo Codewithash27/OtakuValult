@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { isBackendConfigured } from '../lib/api'
 import { ManhwaSeriesDetail } from '../components/ManhwaSeriesDetail'
+import { ChipScroller } from '../components/ChipScroller'
 import {
   chartCoverUrl,
   chartSortLabel,
@@ -18,8 +19,6 @@ import { pornhwadbStatus } from '../lib/pornhwadb'
 import { useMediaItems } from '../hooks/useMediaItems'
 
 const UI_PAGE_SIZE = 24
-const TAGS_COLLAPSED = 24
-
 function listBackSearchParams(params: URLSearchParams): string {
   const next = new URLSearchParams()
   const sort = params.get('sort')
@@ -28,6 +27,12 @@ function listBackSearchParams(params: URLSearchParams): string {
   if (tag) next.set('tag', tag)
   const q = next.toString()
   return q ? `?${q}` : ''
+}
+
+const RANK_STYLE: Record<number, string> = {
+  1: 'bg-gradient-to-br from-amber-200 to-amber-500 text-amber-950 shadow-[0_0_14px_rgba(251,191,36,.7)]',
+  2: 'bg-gradient-to-br from-slate-100 to-slate-400 text-slate-900',
+  3: 'bg-gradient-to-br from-orange-300 to-orange-700 text-orange-950',
 }
 
 function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string }) {
@@ -42,11 +47,19 @@ function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string
   return (
     <Link
       to={`/community-lists/series/${encodeURIComponent(item.slug)}${listQuery}`}
-      className="group block text-left"
+      className="group block text-left lift"
     >
-      <div className="relative rounded-xl overflow-hidden ring-1 ring-white/10 group-hover:ring-violet-500/50 transition-shadow bg-slate-900">
-        <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-black/75 text-[11px] font-bold text-white tabular-nums">
+      <div className="poster-shine relative rounded-2xl overflow-hidden ring-1 ring-white/10 group-hover:ring-lantern-400/60 group-hover:shadow-[0_20px_45px_-18px_rgba(249,138,7,.6)] transition-all duration-300 bg-slate-900">
+        <span
+          className={`absolute top-2 left-2 z-10 min-w-[30px] h-[26px] px-2 grid place-items-center rounded-lg text-[11px] font-extrabold tabular-nums backdrop-blur-sm ${
+            RANK_STYLE[item.rank] ?? 'bg-black/70 text-white'
+          }`}
+        >
           #{item.rank}
+        </span>
+        <div className="absolute inset-x-0 bottom-0 z-[1] h-1/3 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <span className="absolute bottom-2 left-2 z-[2] text-[11px] font-bold text-lantern-200 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+          ★ {formatRatingOutOf5(item.averageRating)}
         </span>
         {inVault && (
           <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-md bg-emerald-950/85 text-[10px] font-bold text-emerald-300 border border-emerald-500/40 backdrop-blur-sm">
@@ -57,14 +70,16 @@ function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string
           <img
             src={cover}
             alt=""
-            className="aspect-[3/4] w-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+            className="aspect-[3/4] w-full object-cover group-hover:scale-[1.06] transition-transform duration-500"
             loading="lazy"
           />
         ) : (
           <div className="aspect-[3/4] grid place-items-center text-3xl text-slate-600">📖</div>
         )}
       </div>
-      <h3 className="font-bold text-sm mt-2.5 line-clamp-2 leading-snug text-slate-900 dark:text-white">{item.title}</h3>
+      <h3 className="font-bold text-sm mt-2.5 line-clamp-2 leading-snug text-slate-900 dark:text-white group-hover:text-lantern-500 dark:group-hover:text-lantern-300 transition-colors">
+        {item.title}
+      </h3>
       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
         {formatRatingOutOf5(item.averageRating)} · {ratings}
       </p>
@@ -122,7 +137,6 @@ function ManhwaTopList() {
     sort === 'trending' || sort === 'recent' ? sort : 'top-rated'
   const selectedTag = params.get('tag')
   const [page, setPage] = useState(1)
-  const [showAllTags, setShowAllTags] = useState(false)
   const listQuery = listBackSearchParams(params)
 
   const status = useQuery({
@@ -148,10 +162,6 @@ function ManhwaTopList() {
     enabled: !!status.data?.configured && isBackendConfigured(),
     staleTime: 10 * 60 * 1000,
   })
-
-  const visibleTags = showAllTags
-    ? (tagCounts.data ?? [])
-    : (tagCounts.data ?? []).slice(0, TAGS_COLLAPSED)
 
   const setSort = (next: ManhwaChartSort) => {
     setParams((prev) => {
@@ -201,30 +211,29 @@ function ManhwaTopList() {
     <div className="space-y-5">
       <ChartHeader sort={safeSort} />
 
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['top-rated', '⭐ Top rated'],
-            ['trending', '⚡ Trending'],
-            ['recent', '🕐 New'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSort(id)}
-            className={`chip !px-3 !py-1.5 !text-xs ${safeSort === id ? 'chip-active' : ''}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          Tags in this chart
-        </p>
-        <div className="flex flex-wrap gap-1.5 items-center">
+      <div className="glass rounded-2xl p-2 flex flex-col md:flex-row md:items-center gap-2 sticky top-[4.5rem] z-20">
+        <div className="flex shrink-0 p-1 gap-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/25">
+          {(
+            [
+              ['top-rated', '⭐ Top rated'],
+              ['trending', '⚡ Trending'],
+              ['recent', '🕐 New'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSort(id)}
+              className={`px-3 h-8 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-300 ${
+                safeSort === id ? 'chip-active' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="hidden md:block w-px h-6 bg-slate-200 dark:bg-white/10" />
+        <ChipScroller label="Tags" className="flex-1">
           <button
             type="button"
             onClick={() => {
@@ -240,7 +249,7 @@ function ManhwaTopList() {
             All
           </button>
           {tagCounts.isLoading && <span className="text-xs text-slate-500">Loading tags…</span>}
-          {visibleTags.map(({ name, count }) => (
+          {(tagCounts.data ?? []).map(({ name, count }) => (
             <button
               key={name}
               type="button"
@@ -250,16 +259,7 @@ function ManhwaTopList() {
               {name} <span className="opacity-65 tabular-nums">{count}</span>
             </button>
           ))}
-          {(tagCounts.data?.length ?? 0) > TAGS_COLLAPSED && (
-            <button
-              type="button"
-              onClick={() => setShowAllTags((v) => !v)}
-              className="chip !px-2.5 !py-1 !text-[11px] text-violet-500"
-            >
-              {showAllTags ? 'Less' : `+${(tagCounts.data?.length ?? 0) - TAGS_COLLAPSED} more`}
-            </button>
-          )}
-        </div>
+        </ChipScroller>
       </div>
 
       {list.isLoading ? (
@@ -277,7 +277,10 @@ function ManhwaTopList() {
         <p className="text-sm text-slate-500 py-12 text-center">No titles match this filter.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-6">
+          <div
+            key={`${safeSort}-${page}-${selectedTag ?? ''}`}
+            className="stagger-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6"
+          >
             {list.data.items.map((item) => (
               <RankedCard key={`${item.rank}-${item.slug}`} item={item} listQuery={listQuery} />
             ))}

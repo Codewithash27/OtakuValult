@@ -126,7 +126,7 @@ export function AniListTitleDetail({ kind, id }: { kind: Kind; id: number }) {
   const year = m.seasonYear ?? m.startDate.year
   const cover = m.coverImage.extraLarge || m.coverImage.large || ''
   const backdrop = m.bannerImage || cover
-  const accent = m.coverImage.color || '#8b5cf6'
+  const accent = m.coverImage.color || '#f98a07'
   const synopsis = cleanMediaDescription(m.description) || ''
   const longSynopsis = synopsis.length > 480
   const tags = m.tags.filter((t) => !t.isMediaSpoiler && t.rank >= 60).slice(0, 12)

@@ -73,7 +73,7 @@ export function MediaCard({ item }: MediaCardProps) {
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
       >
-        <div className="relative overflow-hidden">
+        <div className="poster-shine relative overflow-hidden">
           <PosterImage
             src={item.poster_url}
             alt={item.title}

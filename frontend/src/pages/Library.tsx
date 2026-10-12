@@ -20,6 +20,13 @@ import { THEMES, hasTheme } from '../lib/themes'
 const MEDIA_TYPES: (MediaType | 'all')[] = ['all', 'anime', 'manga', 'manhwa']
 const PAGE_SIZE = 60
 
+const HERO_KANJI: Partial<Record<MediaType | 'all', string>> = {
+  all: '宝',
+  anime: 'アニメ',
+  manga: '漫画',
+  manhwa: '만화',
+}
+
 const HERO: Record<MediaType | 'all', { title: string; blurb: string }> = {
   all: { title: 'Vault', blurb: 'Every anime, manga and manhwa you love, in one place.' },
   anime: { title: 'Anime', blurb: 'Everything you watch, from airing seasons to all-time classics.' },
@@ -228,7 +235,10 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
 
         {/* Hero */}
         <section className="relative overflow-hidden rounded-2xl glass px-4 py-3 lg:px-5 mb-4 animate-fade-up">
-          <div className="absolute -top-20 -right-10 w-48 h-48 rounded-full bg-gradient-to-br from-violet-600/30 to-pink-500/20 blur-3xl" />
+          <div className="absolute -top-20 -right-10 w-48 h-48 rounded-full bg-gradient-to-br from-lantern-500/30 to-jade-500/20 blur-3xl animate-float" />
+          <span className="pointer-events-none select-none absolute right-4 -bottom-6 font-jp font-bold text-[88px] leading-none text-white/[0.04]">
+            {HERO_KANJI[mediaType] ?? '宝'}
+          </span>
           <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h1 className="text-2xl lg:text-3xl font-bold leading-tight">
@@ -291,8 +301,8 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
                 <span
                   className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ${
                     contentMode === 'creamy'
-                      ? 'left-1 bg-gradient-to-r from-rose-500 to-pink-600 shadow-[0_4px_16px_-4px_rgba(244,63,94,.7)]'
-                      : 'left-[calc(50%)] bg-gradient-to-r from-emerald-400 to-cyan-500 shadow-[0_4px_16px_-4px_rgba(34,211,238,.7)]'
+                      ? 'left-1 bg-gradient-to-r from-vermilion-500 to-lantern-500 shadow-[0_4px_16px_-4px_rgba(248,74,37,.7)]'
+                      : 'left-[calc(50%)] bg-gradient-to-r from-jade-500 to-cyan-500 shadow-[0_4px_16px_-4px_rgba(7,196,168,.7)]'
                   }`}
                 />
                 {(['creamy', 'clean'] as const).map((m) => (
@@ -332,7 +342,7 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
               <button
                 onClick={() => setShowWall(true)}
                 disabled={!sorted.length}
-                className="h-10 px-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-slate-900 to-violet-900 border border-violet-500/40 hover:shadow-[0_8px_30px_-8px_rgba(124,58,237,.8)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                className="h-10 px-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-slate-900 to-jade-900 border border-jade-500/40 hover:shadow-[0_8px_30px_-8px_rgba(7,196,168,.7)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
                 title="Fullscreen poster wall"
               >
                 🎞️ Cinema

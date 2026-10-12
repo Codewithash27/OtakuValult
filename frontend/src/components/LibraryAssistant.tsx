@@ -488,7 +488,7 @@ export function LibraryAssistant() {
       suggestions={suggestions}
       placeholder="Ask Kimetsu about your library, plots, recommendations…"
       storageKey="kimetsu-assistant-history"
-      theme={{ accent: '#f59e0b', accent2: '#06b6d4', mode: 'auto' }}
+      theme={{ accent: '#f98a07', accent2: '#07c4a8', mode: 'auto' }}
       className="vault-bot"
     />
   )

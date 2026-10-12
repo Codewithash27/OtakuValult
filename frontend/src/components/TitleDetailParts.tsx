@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ChipScroller } from './ChipScroller'
 
 /** Gradient for a 0-100 score badge. */
 export function scoreTone(score100: number) {
@@ -95,14 +96,18 @@ export function InfoRow({ label, value }: { label: string; value: ReactNode }) {
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="glass-strong rounded-2xl p-5">
-      <h2 className="text-sm font-bold text-slate-900 dark:text-white mb-3">{title}</h2>
+      <h2 className="section-title !text-sm mb-3">{title}</h2>
       {children}
     </section>
   )
 }
 
 export function CoverRow({ children }: { children: ReactNode }) {
-  return <div className="flex gap-3 overflow-x-auto pb-1 snap-x">{children}</div>
+  return (
+    <ChipScroller railClassName="!gap-3 !items-start !pt-2 snap-x">
+      {children}
+    </ChipScroller>
+  )
 }
 
 export function CoverCard({
@@ -119,10 +124,10 @@ export function CoverCard({
   subtitle?: string
 }) {
   return (
-    <Link to={to} className="group block w-[118px] shrink-0 snap-start">
-      <div className="relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 aspect-[2/3] bg-slate-800">
+    <Link to={to} className="group block w-[118px] shrink-0 snap-start lift">
+      <div className="poster-shine relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 aspect-[2/3] bg-slate-800 group-hover:ring-lantern-400/60 group-hover:shadow-[0_14px_30px_-14px_rgba(249,138,7,.7)] transition-all duration-300">
         {image && (
-          <img src={image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+          <img src={image} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
         )}
         {badge && (
           <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide bg-black/70 text-white backdrop-blur-sm">

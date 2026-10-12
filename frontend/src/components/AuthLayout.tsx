@@ -30,8 +30,8 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
   return (
     <div className="card-ring glass-strong rounded-3xl p-8 max-sm:p-6 animate-fade-up shadow-[0_30px_90px_-25px_rgba(168,85,247,.6)]">
       <div className="flex items-center gap-3 mb-8 max-sm:mb-5">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 grid place-items-center font-display font-bold text-white shadow-lg">
-          O
+        <div className="w-11 h-11 rounded-[14px] bg-gradient-to-b from-lantern-400 to-vermilion-600 grid place-items-center font-jp font-bold text-lg text-white shadow-lg ring-1 ring-white/30">
+          宝
         </div>
         <span className="font-display font-bold text-xl text-white">
           Otaku<span className="text-gradient">Vault</span>

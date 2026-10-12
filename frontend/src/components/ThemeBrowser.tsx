@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { MediaItem } from '../types/media'
 import { THEMES, THEME_TAGS, hasTheme } from '../lib/themes'
 import { PosterImage } from './PosterImage'
+import { ChipScroller } from './ChipScroller'
 
 type TagsOf = (item: MediaItem) => string[] | undefined
 
@@ -46,19 +47,11 @@ export function ThemeFilter({
   }, [items, tagsOf])
 
   const active = selectedThemes.length + selectedTags.length > 0
-  const chip = (on: boolean) =>
-    `px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-300 border ${
-      on
-        ? 'text-white border-transparent bg-gradient-to-r from-rose-500 to-fuchsia-600 shadow-[0_6px_20px_-6px_rgba(244,63,94,.7)]'
-        : 'border-slate-200 bg-white/60 text-slate-600 hover:border-rose-400 hover:text-rose-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300'
-    }`
+  const chip = (on: boolean) => `chip !px-2.5 !py-1 !text-xs ${on ? 'chip-active' : ''}`
 
   return (
-    <div className="border-t border-slate-200 dark:border-white/5 pt-2">
-      <div className="flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0 mr-1">
-          Themes
-        </span>
+    <div className="border-t border-slate-200 dark:border-white/5 pt-1.5 space-y-0.5">
+      <ChipScroller label="Themes">
         {active && (
           <button onClick={onClear} className={`${chip(false)} !text-rose-500`} aria-label="Clear themes">
             ✕
@@ -91,16 +84,16 @@ export function ThemeFilter({
             No AniList tags on these titles yet.
           </span>
         )}
-      </div>
+      </ChipScroller>
 
       {showMore && (
-        <div className="mt-2 flex flex-wrap gap-1.5 px-1 max-h-32 overflow-y-auto">
+        <ChipScroller label="Tags" className="animate-fade-up [animation-duration:.3s]">
           {otherTags.map(([name, count]) => (
             <button key={name} onClick={() => onToggleTag(name)} className={chip(selectedTags.includes(name))}>
               {name} <span className="opacity-70">{count}</span>
             </button>
           ))}
-        </div>
+        </ChipScroller>
       )}
     </div>
   )

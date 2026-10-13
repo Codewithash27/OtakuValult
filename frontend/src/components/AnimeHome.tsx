@@ -96,7 +96,7 @@ export function AnimeHome({
   const byId = useMemo(() => {
     const map = new Map<number, BrowseAnime>()
     for (const m of data?.shelf ?? []) map.set(m.id, m)
-    for (const m of [...(data?.trending ?? []), ...(data?.popular ?? []), ...(data?.upcoming ?? [])]) {
+    for (const m of [...(data?.trending ?? []), ...(data?.popular ?? []), ...(data?.upcoming ?? []), ...(data?.fresh ?? [])]) {
       if (!map.has(m.id)) map.set(m.id, m)
     }
     return map
@@ -114,16 +114,27 @@ export function AnimeHome({
         meta: byId.get(anilistId(item) ?? -1),
       }))
       .filter((s) => s.meta?.banner)
-      .slice(0, 4)
-    const owned = new Set(ids)
-    const fromTrend = (data?.trending ?? [])
-      .filter((m) => !owned.has(m.id) && m.banner)
-      .slice(0, 6)
-      .map((meta) => ({ kind: 'catalog' as const, meta }))
-    const mixed: Array<(typeof fromShelf)[number] | (typeof fromTrend)[number]> = []
+      .slice(0, 2)
+    const seen = new Set(ids)
+    const takeCatalog = (list: BrowseAnime[] | undefined, n: number) => {
+      const out: { kind: 'catalog'; meta: BrowseAnime }[] = []
+      for (const m of list ?? []) {
+        if (!m.banner || seen.has(m.id)) continue
+        seen.add(m.id)
+        out.push({ kind: 'catalog', meta: m })
+        if (out.length >= n) break
+      }
+      return out
+    }
+    const fromNew = takeCatalog(data?.fresh, 3)
+    const fromSoon = takeCatalog(data?.upcoming, 2)
+    const fromTrend = takeCatalog(data?.trending, 3)
+    const mixed: Array<(typeof fromShelf)[number] | (typeof fromNew)[number]> = []
+    const pools = [fromShelf, fromNew, fromSoon, fromTrend]
     for (let i = 0; i < 8; i++) {
-      if (fromShelf[i]) mixed.push(fromShelf[i])
-      if (fromTrend[i]) mixed.push(fromTrend[i])
+      for (const pool of pools) {
+        if (pool[i]) mixed.push(pool[i])
+      }
     }
     return mixed.slice(0, 8)
   }, [watching, ids, data, byId])
@@ -174,7 +185,13 @@ export function AnimeHome({
   const spotlightTitle = slide?.kind === 'shelf' ? slide.item.title : slide?.meta?.title
   const spotlightMeta = slide?.kind === 'shelf' ? slide.meta : slide?.meta
   const spotlightKicker =
-    slide?.kind === 'shelf' ? `Continue watching · ${index + 1}` : `#${index + 1} Spotlight`
+    slide?.kind === 'shelf'
+      ? `Continue watching · ${index + 1}`
+      : slide?.meta?.status === 'NOT_YET_RELEASED'
+        ? 'Upcoming'
+        : slide?.meta?.status === 'RELEASING'
+          ? 'New this season'
+          : `#${index + 1} Spotlight`
   const spotlightSynopsis = spotlightMeta?.description
   const spotlightOwned = slide?.kind === 'shelf' ? slide.item : slide?.meta ? shelfMatch(items, slide.meta.id) : null
 

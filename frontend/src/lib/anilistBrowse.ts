@@ -82,6 +82,9 @@ query Browse($ids: [Int], $airFrom: Int, $airTo: Int) {
   upcoming: Page(page: 1, perPage: 14) {
     media(type: ANIME, sort: POPULARITY_DESC, status: NOT_YET_RELEASED, isAdult: false) { ${MEDIA} }
   }
+  fresh: Page(page: 1, perPage: 14) {
+    media(type: ANIME, status: RELEASING, sort: START_DATE_DESC, isAdult: false) { ${MEDIA} }
+  }
   shelf: Page(page: 1, perPage: 25) {
     media(id_in: $ids, type: ANIME) { ${MEDIA} }
   }
@@ -98,6 +101,7 @@ export interface AnimeBrowseData {
   trending: BrowseAnime[]
   popular: BrowseAnime[]
   upcoming: BrowseAnime[]
+  fresh: BrowseAnime[]
   shelf: BrowseAnime[]
   airing: AiringSlot[]
 }
@@ -112,6 +116,7 @@ export async function fetchAnimeBrowse(shelfIds: number[]): Promise<AnimeBrowseD
     trending: { media: any[] }
     popular: { media: any[] }
     upcoming: { media: any[] }
+    fresh: { media: any[] }
     shelf: { media: any[] }
     airing: { airingSchedules: { airingAt: number; episode: number; media: any }[] }
   }>(BROWSE_QUERY, {
@@ -132,6 +137,7 @@ export async function fetchAnimeBrowse(shelfIds: number[]): Promise<AnimeBrowseD
     trending: list(data.trending?.media),
     popular: list(data.popular?.media),
     upcoming: list(data.upcoming?.media),
+    fresh: list(data.fresh?.media),
     shelf: shelfIds.length ? list(data.shelf?.media) : [],
     airing,
   }

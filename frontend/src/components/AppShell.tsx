@@ -156,7 +156,7 @@ export function AppShell() {
       </div>
 
       {/* Mobile header */}
-      <header className="lg:hidden glass-strong border-x-0 border-t-0 sticky top-0 z-40">
+      <header className="lg:hidden glass-strong border-x-0 border-t-0 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="px-3 py-2.5">
           <div className="flex items-center gap-2 min-w-0">
             <div className="min-w-0 shrink">
@@ -284,7 +284,7 @@ export function AppShell() {
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-3 left-3 right-3 z-40 glass-strong rounded-2xl flex shadow-2xl">
+      <nav className="lg:hidden fixed z-40 glass-strong rounded-2xl flex shadow-2xl left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] bottom-[max(0.75rem,env(safe-area-inset-bottom))]">
         {navVisible.map((item) => (
           <Link
             key={item.label}
@@ -302,7 +302,7 @@ export function AppShell() {
         ))}
       </nav>
 
-      <div className="lg:hidden h-24" />
+      <div className="lg:hidden h-[calc(6rem+env(safe-area-inset-bottom))]" />
 
       <LibraryAssistant />
       <ModeEffects />

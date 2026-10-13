@@ -15,6 +15,7 @@ import { ItemDrawer } from '../components/ItemDrawer'
 import { PosterWall } from '../components/PosterWall'
 import { PremiereMode } from '../components/PremiereMode'
 import { SpotlightReel } from '../components/SpotlightReel'
+import { AnimeHome } from '../components/AnimeHome'
 import { LibraryIntro, introWanted, useSplashDone } from '../components/LibraryIntro'
 import { PANIC_EVENT } from '../components/ModeEffects'
 import { ThemeFilter, ThemeRows } from '../components/ThemeBrowser'
@@ -294,6 +295,53 @@ export default function Library({ fixedType }: { fixedType?: MediaType }) {
 
   if (isLoading) {
     return <Skeleton count={8} view={view} />
+  }
+
+  if (mediaType === 'anime') {
+    return (
+      <>
+        {error && <ErrorBanner error={error as Error} onRetry={() => refetch()} />}
+        <AnimeHome
+          items={typeItems}
+          search={searchQ}
+          onSearch={handleSearch}
+          status={status as Status | 'all'}
+          onStatus={handleStatusChange}
+          counts={counts}
+          onOpen={openItem}
+          onPremiere={(item) => setPremiere({ startId: item.id })}
+          onCinema={() => setShowWall(true)}
+          filtered={sorted}
+          shown={shown}
+          view={byTheme ? 'grid' : view}
+          onView={handleView}
+          sentinelRef={sentinelRef}
+        />
+        <AddItemModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+        {showWall &&
+          createPortal(
+            <PosterWall items={sorted} onClose={() => setShowWall(false)} onPremiere={() => setPremiere({ startId: undefined })} />,
+            document.body
+          )}
+        {intro && splashDone && (
+          <LibraryIntro items={allItems} mode={contentMode} isAdult={isAdult} onDone={() => setIntro(false)} />
+        )}
+        {premiere && (
+          <PremiereMode
+            items={sorted}
+            startId={premiere.startId}
+            tagsOf={tagsOf}
+            onClose={() => setPremiere(null)}
+            onOpen={(item) => {
+              setPremiere(null)
+              setShowWall(false)
+              openItem(item)
+            }}
+          />
+        )}
+        <ItemDrawer item={selectedItem} />
+      </>
+    )
   }
 
   return (

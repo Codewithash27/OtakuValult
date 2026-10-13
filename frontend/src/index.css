@@ -128,6 +128,9 @@
   .chip-rail {
     @apply flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 scroll-smooth;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
   }
   .chip-rail::-webkit-scrollbar { display: none; }
   .chip-rail.fade-r { mask-image: linear-gradient(90deg, #000 85%, transparent); }
@@ -972,6 +975,74 @@ html[data-mode='creamy'] .premiere-flash {
   72%, 100% { opacity: 0; transform: scale(1.06); filter: blur(4px); }
 }
 
+/* ---- Anime home (streaming-style, anime page only) ---- */
+.anime-spot {
+  background: #070b12;
+  height: clamp(16.75rem, 48svh, 22rem);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (min-width: 640px) {
+  .anime-spot { height: clamp(20rem, 42vh, 28rem); }
+}
+@media (min-width: 1024px) {
+  .anime-spot { height: clamp(22rem, 42vh, 30rem); }
+}
+.anime-spot-art {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .7s ease;
+  pointer-events: none;
+  overflow: hidden;
+}
+.anime-spot-art.is-on { opacity: 1; }
+.anime-spot-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 70% 40%;
+}
+@media (min-width: 1024px) {
+  .anime-spot-art img { object-position: 82% 42%; }
+}
+.anime-spot-shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgb(7 11 18 / .18) 0%, rgb(7 11 18 / .12) 36%, rgb(7 11 18 / .82) 100%),
+    linear-gradient(90deg, rgb(7 11 18 / .55) 0%, transparent 58%);
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .anime-spot-shade {
+    background:
+      linear-gradient(90deg, rgb(7 11 18 / .88) 0%, rgb(7 11 18 / .55) 28%, rgb(7 11 18 / .12) 58%, transparent 78%),
+      linear-gradient(180deg, rgb(7 11 18 / .2) 0%, transparent 28%, transparent 62%, rgb(7 11 18 / .55) 100%);
+  }
+}
+.anime-spot-dots {
+  position: absolute;
+  left: 0; right: 0; bottom: .65rem;
+  z-index: 20;
+  justify-content: center;
+  gap: .35rem;
+  pointer-events: auto;
+}
+.anime-spot-dot {
+  width: .42rem; height: .42rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / .38);
+  border: 0;
+  padding: 0;
+}
+.anime-spot-dot.is-on {
+  width: 1.15rem;
+  background: #f98a07;
+}
+.anime-tile { transition: transform .25s ease; }
+.anime-tile:hover { transform: translateY(-4px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

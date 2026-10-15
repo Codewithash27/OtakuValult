@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import chat, health, images, pornhwadb, search
+from app.api.routes import admin, chat, health, images, pornhwadb, search
 from app.core.config import settings
 from app.services import pornhwadb as phdb_service
 from app.services.rag_service import rag_service
@@ -34,3 +34,4 @@ app.include_router(search.router, prefix="/api", tags=["search"])
 app.include_router(images.router, prefix="/api", tags=["images"])
 app.include_router(pornhwadb.router, prefix="/api", tags=["pornhwadb"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
+app.include_router(admin.router, prefix="/api", tags=["admin"])

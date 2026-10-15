@@ -10,6 +10,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Library from './pages/Library'
 import Import from './pages/Import'
+import AdminUsers from './pages/AdminUsers'
 import Gallery from './pages/Gallery'
 import CommunityLists from './pages/CommunityLists'
 import NotFound from './pages/NotFound'
@@ -83,6 +84,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   <Route path="/community-lists/series/:slug" element={<CommunityLists />} />
                   <Route path="/title/:kind/:id" element={<TitleDetail />} />
                   <Route path="/import" element={<Import />} />
+                  <Route path="/admin" element={<AdminUsers />} />
                 </Route>
               </Route>
               <Route path="*" element={<NotFound />} />

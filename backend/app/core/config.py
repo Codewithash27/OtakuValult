@@ -3,8 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     supabase_url: str = ""
+    supabase_key: str = ""  # local .env often stores the anon key as SUPABASE_KEY
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
+    # Comma-separated emails that can open /api/admin (Lucifer by default).
+    super_admin_email: str = "lucifer@gmail.com"
     tmdb_api_key: str = ""
     youtube_api_key: str = ""
     nvidia_api_key: str = ""

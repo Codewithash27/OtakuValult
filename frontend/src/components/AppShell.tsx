@@ -7,8 +7,20 @@ import { LibraryAssistant } from './LibraryAssistant'
 import { InstallAppButton } from './InstallAppButton'
 import { useContentMode } from '../hooks/useAdultFilter'
 import { ModeEffects, triggerPanic } from './ModeEffects'
+import { isSuperAdmin } from '../lib/superAdmin'
+import { readAdminHome } from '../lib/adminSession'
+import { returnToAdmin } from '../lib/adminApi'
+import { useToast } from './Toast'
 
-const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean; creamyOnly?: boolean; cleanOnly?: boolean }[] = [
+const NAV_ITEMS: {
+  label: string
+  icon: string
+  href: string
+  disabled?: boolean
+  creamyOnly?: boolean
+  cleanOnly?: boolean
+  adminOnly?: boolean
+}[] = [
   { label: 'Library', icon: '📚', href: '/' },
   { label: 'Anime', icon: '⛩️', href: '/anime', cleanOnly: true },
   { label: 'Manhwa', icon: '✨', href: '/manhwa', creamyOnly: true },
@@ -16,6 +28,7 @@ const NAV_ITEMS: { label: string; icon: string; href: string; disabled?: boolean
   { label: 'Top rated', icon: '⭐', href: '/community-lists', creamyOnly: true },
   { label: 'Stats', icon: '📊', href: '#', disabled: true },
   { label: 'Import', icon: '⬆️', href: '/import' },
+  { label: 'Users', icon: '👑', href: '/admin', adminOnly: true },
 ]
 
 const FIREFLIES = Array.from({ length: 14 }, (_, i) => ({
@@ -58,8 +71,12 @@ function SidebarMenu({ onNavigate }: { onNavigate?: () => void }) {
   const from = (location.state as { from?: string } | null)?.from
   const pathname = from && /^\/(title|community-lists\/series)\//.test(location.pathname) ? from : location.pathname
   const [contentMode] = useContentMode()
+  const { user } = useSession()
   const items = NAV_ITEMS.filter(
-    (item) => (!item.creamyOnly || contentMode === 'creamy') && (!item.cleanOnly || contentMode === 'clean')
+    (item) =>
+      (!item.creamyOnly || contentMode === 'creamy') &&
+      (!item.cleanOnly || contentMode === 'clean') &&
+      (!item.adminOnly || isSuperAdmin(user?.email))
   )
 
   return (
@@ -110,7 +127,9 @@ export function AppShell() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [, setSearchParams] = useSearchParams()
   const { user, signOut } = useSession()
+  const { showToast } = useToast()
   const navigate = useNavigate()
+  const adminHome = readAdminHome()
   const { pathname } = useLocation()
   const [contentMode, setContentMode] = useContentMode()
 
@@ -123,10 +142,15 @@ export function AppShell() {
   }, [contentMode, pathname, navigate])
 
   const navVisible = NAV_ITEMS.filter(
-    (item) => !item.disabled && (!item.creamyOnly || contentMode === 'creamy') && (!item.cleanOnly || contentMode === 'clean')
+    (item) =>
+      !item.disabled &&
+      !item.adminOnly &&
+      (!item.creamyOnly || contentMode === 'creamy') &&
+      (!item.cleanOnly || contentMode === 'clean')
   )
 
   const handleLogout = async () => {
+    sessionStorage.removeItem('otakuvault_admin_home')
     await signOut()
     navigate('/login')
   }
@@ -278,6 +302,25 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
+        {adminHome && (
+          <div className="mx-4 lg:mx-6 mt-4 flex flex-wrap items-center gap-2 rounded-2xl px-4 py-2.5 bg-lantern-500/15 border border-lantern-500/30 text-sm">
+            <span className="font-semibold text-lantern-500">Viewing as {adminHome.viewing}</span>
+            <button
+              type="button"
+              className="ml-auto h-8 px-3 rounded-lg text-xs font-bold bg-lantern-500 text-white"
+              onClick={async () => {
+                try {
+                  await returnToAdmin()
+                  navigate('/admin')
+                } catch (e) {
+                  showToast(e instanceof Error ? e.message : 'Could not return', 'error')
+                }
+              }}
+            >
+              Back to admin
+            </button>
+          </div>
+        )}
         <div key={pathname.split('/').slice(0, 3).join('/')} className="page-enter flex-1 p-4 lg:p-6">
           <Outlet />
         </div>

@@ -64,7 +64,7 @@ export async function loginAsUser(id: string) {
 
   const finished = await supabase.rpc('admin_finish_impersonation')
   if (finished.error) {
-    await supabase.rpc('admin_abort_impersonation', { p_id: id }).catch(() => undefined)
+    await supabase.rpc('admin_abort_impersonation', { p_id: id })
     throw new Error(rpcMessage(finished.error))
   }
 }

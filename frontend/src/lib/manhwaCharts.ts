@@ -2,6 +2,7 @@ import { apiFetch } from './api'
 import { proxiedPornhwaCover, type PornhwaSeries } from './pornhwadb'
 
 export type ManhwaChartSort = 'top-rated' | 'trending' | 'recent'
+export type ManhwaHeat = 'soft' | 'steamy' | 'explicit'
 
 export type RankedManhwa = PornhwaSeries & {
   rank: number
@@ -16,10 +17,20 @@ export type ChartTagCount = {
 export async function fetchManhwaChartTags(
   sort: ManhwaChartSort,
   limit = 48,
+  heat: ManhwaHeat | null = null,
 ): Promise<ChartTagCount[]> {
   const params = new URLSearchParams({ sort, limit: String(limit) })
+  if (heat) params.set('heat', heat)
   const data = await apiFetch<{ tags: ChartTagCount[] }>(`/api/pornhwadb/charts/tags?${params}`)
   return data.tags ?? []
+}
+
+export async function fetchChartMembership(
+  sort: ManhwaChartSort,
+): Promise<{ slugs: string[]; titles: string[] }> {
+  const params = new URLSearchParams({ sort })
+  const data = await apiFetch<{ slugs?: string[]; titles?: string[] }>(`/api/pornhwadb/charts/membership?${params}`)
+  return { slugs: data.slugs ?? [], titles: data.titles ?? [] }
 }
 
 export async function fetchManhwaChartPage(
@@ -27,6 +38,7 @@ export async function fetchManhwaChartPage(
   sort: ManhwaChartSort,
   perPage = 24,
   tag: string | null = null,
+  heat: ManhwaHeat | null = null,
 ): Promise<{ items: RankedManhwa[]; hasNextPage: boolean; total: number }> {
   const params = new URLSearchParams({
     sort,
@@ -34,6 +46,7 @@ export async function fetchManhwaChartPage(
     limit: String(perPage),
   })
   if (tag) params.set('tag', tag)
+  if (heat) params.set('heat', heat)
   const data = await apiFetch<{
     items: RankedManhwa[]
     hasNextPage: boolean
@@ -48,9 +61,9 @@ export function chartCoverUrl(cover: string | null | undefined): string | null {
 }
 
 export function chartSortLabel(sort: ManhwaChartSort): string {
-  if (sort === 'top-rated') return 'Top rated'
-  if (sort === 'trending') return 'Trending'
-  return 'New'
+  if (sort === 'top-rated') return 'Top'
+  if (sort === 'trending') return 'Hot right now'
+  return 'Just added'
 }
 
 export function formatRatingOutOf5(avg: number | null | undefined): string {

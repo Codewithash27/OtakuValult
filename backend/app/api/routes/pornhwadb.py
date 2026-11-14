@@ -20,13 +20,14 @@ async def pornhwadb_charts(
     page: int = Query(1, ge=1, le=500),
     limit: int = Query(24, ge=1, le=50),
     tag: str | None = Query(None, max_length=80),
+    heat: str | None = Query(None, pattern="^(soft|steamy|explicit)$"),
 ) -> dict:
     if not phdb.is_configured():
         raise HTTPException(
             status_code=503,
             detail="PornhwaDB export not found. Place pornhwa-export.json on the server (see backend/data/README.md).",
         )
-    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag)
+    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag, heat=heat)
     register_search_image_urls([i["coverImage"] for i in out.get("items") or [] if i.get("coverImage")])
     return out
 
@@ -35,10 +36,22 @@ async def pornhwadb_charts(
 async def pornhwadb_chart_tags(
     sort: str = Query("top-rated", pattern="^(top-rated|trending|recent)$"),
     limit: int = Query(48, ge=1, le=80),
+    heat: str | None = Query(None, pattern="^(soft|steamy|explicit)$"),
 ) -> dict:
     if not phdb.is_configured():
         raise HTTPException(status_code=503, detail="PornhwaDB export not configured")
-    return {"sort": sort, "tags": phdb.chart_tag_counts(sort=sort, limit=limit)}
+    return {"sort": sort, "heat": heat, "tags": phdb.chart_tag_counts(sort=sort, limit=limit, heat=heat)}
+
+
+@router.get("/pornhwadb/charts/membership")
+async def pornhwadb_chart_membership(
+    sort: str = Query("top-rated", pattern="^(top-rated|trending|recent)$"),
+) -> dict:
+    """Titles already counted by the chart, so shelf adds are not counted twice."""
+    if not phdb.is_configured():
+        raise HTTPException(status_code=503, detail="PornhwaDB export not configured")
+    found = phdb.chart_membership(sort)
+    return {"sort": sort, **found}
 
 
 @router.get("/pornhwadb/search")
@@ -146,9 +159,16 @@ async def pornhwadb_series_similar(slug: str, limit: int = Query(10, ge=1, le=20
                 tagged.append((jaccard + (row.get("averageRating") or 0) * 0.02, row))
     tagged.sort(key=lambda x: x[0], reverse=True)
     shared = [card(r) for _, r in tagged[:limit]]
+    same_kink = phdb.same_kink_series(
+        slug,
+        limit=limit,
+        exclude={s["slug"] for s in storyline if s.get("slug")},
+    )
 
-    register_search_image_urls([c["coverImage"] for c in storyline + shared if c.get("coverImage")])
-    return {"storyline": storyline, "sharedTags": shared}
+    register_search_image_urls(
+        [c["coverImage"] for c in storyline + shared + same_kink if c.get("coverImage")]
+    )
+    return {"storyline": storyline, "sharedTags": shared, "sameKink": same_kink}
 
 
 @router.get("/pornhwadb/series/{slug}/images")

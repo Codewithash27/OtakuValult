@@ -175,6 +175,67 @@ def series_has_export_tag(series: dict[str, Any], tag: str | None) -> bool:
     return any(t.lower().strip() == want for t in _tag_names(series))
 
 
+# Adult heat for Creamy charts. Keep in sync with frontend/src/lib/manhwaHeat.ts.
+# School, age-gap, and family tags stay out of this boost.
+_EXPLICIT_TAGS = frozenset(
+    {
+        "netorare",
+        "netori",
+        "netorase",
+        "swapping",
+        "multiple couples",
+        "milf",
+        "cougar",
+        "threesome",
+        "group sex",
+        "oyakodon",
+        "shimaidon",
+        "exhibitionism",
+        "voyeur",
+        "voyeurism",
+        "public sex",
+        "blackmail",
+        "mind control",
+        "corruption",
+        "cheating",
+        "adulterer",
+        "betrayal",
+        "hardcore",
+        "uncensored",
+        "bdsm",
+        "sex toys",
+        "vanilla",
+    }
+)
+_STEAMY_TAGS = frozenset(
+    {
+        "marriage",
+        "arranged marriage",
+        "female harem",
+        "mixed gender harem",
+        "harem",
+        "office",
+        "office lady",
+        "workplace",
+        "cohabitation",
+    }
+)
+_KINK_TAGS = _EXPLICIT_TAGS | _STEAMY_TAGS
+_HEATS = frozenset({"soft", "steamy", "explicit"})
+_YOUTH_TAGS = frozenset({"school life", "teacher", "high school", "middle school", "elementary school"})
+
+
+def series_heat(series: dict[str, Any]) -> str:
+    names = {t.lower().strip() for t in _tag_names(series)}
+    if names & _YOUTH_TAGS:
+        return "soft"
+    if names & _EXPLICIT_TAGS:
+        return "explicit"
+    if names & _STEAMY_TAGS:
+        return "steamy"
+    return "soft"
+
+
 def _is_bl_or_yuri(series: dict[str, Any]) -> bool:
     for name in _tag_names(series):
         low = name.lower()
@@ -245,10 +306,17 @@ def _chart_candidates(sort: str) -> list[dict[str, Any]]:
     return rows
 
 
-def chart_tag_counts(*, sort: str = "top-rated", limit: int = 48) -> list[dict[str, Any]]:
+def chart_tag_counts(
+    *,
+    sort: str = "top-rated",
+    limit: int = 48,
+    heat: str | None = None,
+) -> list[dict[str, Any]]:
     """Tag frequencies for titles in the current chart (for filter chips)."""
     key = sort if sort in ("top-rated", "trending", "recent") else "top-rated"
     ranked = _chart_candidates(key)
+    if heat in _HEATS:
+        ranked = [s for s in ranked if series_heat(s) == heat]
     counts: dict[str, int] = {}
     for series in ranked:
         for name in _tag_names(series):
@@ -260,16 +328,43 @@ def chart_tag_counts(*, sort: str = "top-rated", limit: int = 48) -> list[dict[s
     return rows[: max(1, min(limit, 80))]
 
 
+def _norm_title(title: str) -> str:
+    return "".join(ch for ch in title.lower() if ch.isalnum())
+
+
+def chart_membership(sort: str = "top-rated") -> dict[str, list[str]]:
+    """Slugs and normalized titles already included in a chart's tag counts."""
+    key = sort if sort in ("top-rated", "trending", "recent") else "top-rated"
+    slugs: list[str] = []
+    titles: list[str] = []
+    seen_titles: set[str] = set()
+    for series in _chart_candidates(key):
+        slug = str(series.get("slug") or "").strip()
+        if slug:
+            slugs.append(slug)
+        names = [series.get("title"), *(series.get("alternativeTitles") or [])]
+        for name in names:
+            norm = _norm_title(str(name or ""))
+            if norm and norm not in seen_titles:
+                seen_titles.add(norm)
+                titles.append(norm)
+    return {"slugs": slugs, "titles": titles}
+
+
 def chart_page(
     *,
     sort: str = "top-rated",
     page: int = 1,
     limit: int = 24,
     tag: str | None = None,
+    heat: str | None = None,
 ) -> dict[str, Any]:
     """Ranked manhwa from export (matches PornhwaDB-style top lists; no Yuri/BL)."""
     key = sort if sort in ("top-rated", "trending", "recent") else "top-rated"
     ranked = _chart_candidates(key)
+    heat_key = heat if heat in _HEATS else None
+    if heat_key:
+        ranked = [s for s in ranked if series_heat(s) == heat_key]
     if tag:
         ranked = [s for s in ranked if series_has_export_tag(s, tag)]
     page = max(1, page)
@@ -285,6 +380,7 @@ def chart_page(
     return {
         "sort": key,
         "tag": tag,
+        "heat": heat_key,
         "page": page,
         "perPage": limit,
         "total": len(ranked),
@@ -389,6 +485,54 @@ def _find_series_raw(slug: str) -> dict[str, Any] | None:
         if str(series.get("slug") or "").lower() == key:
             return series
     return None
+
+
+def same_kink_series(slug: str, *, limit: int = 10, exclude: set[str] | None = None) -> list[dict[str, Any]]:
+    """Titles that share explicit or steamy tags with this series."""
+    target = get_series(slug)
+    if not target:
+        return []
+    want = {t.lower() for t in target.get("tags") or []} & _KINK_TAGS
+    if not want:
+        return []
+    skip = {slug.lower(), *(s.lower() for s in (exclude or set()))}
+    scored: list[tuple[int, int, float, dict[str, Any], set[str]]] = []
+    for row in search_all_public():
+        key = str(row.get("slug") or "").lower()
+        if not key or key in skip:
+            continue
+        names = {t.lower() for t in row.get("tags") or []}
+        if names & _YOUTH_TAGS:
+            continue
+        overlap = names & want
+        if not overlap:
+            continue
+        scored.append(
+            (
+                len(overlap & _EXPLICIT_TAGS),
+                len(overlap),
+                float(row.get("averageRating") or 0),
+                row,
+                overlap,
+            )
+        )
+    scored.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    cards: list[dict[str, Any]] = []
+    for hit in scored[: max(1, min(limit, 20))]:
+        row, overlap = hit[3], hit[4]
+        tags = list(row.get("tags") or [])
+        spicy = [t for t in tags if t.lower() in overlap]
+        rest = [t for t in tags if t.lower() not in overlap]
+        cards.append(
+            {
+                "slug": row.get("slug"),
+                "title": row.get("title"),
+                "coverImage": row.get("coverImage"),
+                "averageRating": row.get("averageRating"),
+                "tags": (spicy + rest)[:3],
+            }
+        )
+    return cards
 
 
 def get_series(slug: str) -> dict[str, Any] | None:

@@ -26,7 +26,7 @@ const NAV_ITEMS: {
   { label: 'Manhwa', icon: '✨', href: '/manhwa', creamyOnly: true },
   { label: 'Gallery', icon: '🖼️', href: '/gallery' },
   { label: 'Top rated', icon: '⭐', href: '/community-lists', creamyOnly: true },
-  { label: 'Stats', icon: '📊', href: '#', disabled: true },
+  { label: '18+', icon: '🔞', href: '/stats', creamyOnly: true },
   { label: 'Import', icon: '⬆️', href: '/import' },
   { label: 'Users', icon: '👑', href: '/admin', adminOnly: true },
 ]

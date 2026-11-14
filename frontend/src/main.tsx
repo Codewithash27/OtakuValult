@@ -13,6 +13,7 @@ import Import from './pages/Import'
 import AdminUsers from './pages/AdminUsers'
 import Gallery from './pages/Gallery'
 import CommunityLists from './pages/CommunityLists'
+import SpiceShelf from './pages/SpiceShelf'
 import NotFound from './pages/NotFound'
 import TitleDetail from './pages/TitleDetail'
 import { IntroSplash } from './components/IntroSplash'
@@ -81,6 +82,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                   <Route path="/manhwa" element={<Library key="manhwa" fixedType="manhwa" />} />
                   <Route path="/gallery" element={<Gallery />} />
                   <Route path="/community-lists" element={<CommunityLists />} />
+                  <Route path="/stats" element={<SpiceShelf />} />
                   <Route path="/community-lists/series/:slug" element={<CommunityLists />} />
                   <Route path="/title/:kind/:id" element={<TitleDetail />} />
                   <Route path="/import" element={<Import />} />

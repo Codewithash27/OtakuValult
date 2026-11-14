@@ -119,8 +119,8 @@ export function SearchBar({
       const el = searchRef.current
       if (!el) return
       const r = el.getBoundingClientRect()
-      const width = Math.min(Math.max(r.width, 380), window.innerWidth - 24)
-      const left = Math.min(Math.max(12, r.right - width), window.innerWidth - width - 12)
+      const width = Math.min(Math.max(r.width, 280), Math.min(420, window.innerWidth - 16))
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8)
       setPanel({ top: r.bottom + 8, left, width })
     }
     if (!showDropdown) return
@@ -170,6 +170,8 @@ export function SearchBar({
   const handleAddResult = (result: SearchResult) => {
     setSelectedResult(result)
     setShowAddDialog(true)
+    setShowDropdown(false)
+    setShowFullModal(false)
   }
 
   const handleAddDialogClose = () => {
@@ -226,21 +228,21 @@ export function SearchBar({
         )}
       </label>
 
-      {showDropdown &&
+      {showDropdown && !showAddDialog &&
         query.trim() &&
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[80] glass-strong rounded-2xl overflow-hidden animate-fade-up [animation-duration:.2s]"
+            className="fixed z-[80] glass-strong rounded-2xl overflow-hidden flex flex-col animate-fade-up [animation-duration:.2s]"
             style={{
               top: panel.top,
               left: panel.left,
               width: panel.width,
-              maxHeight: 'min(70vh, 28rem)',
+              maxHeight: `min(70vh, 28rem, calc(100dvh - ${panel.top + 12}px))`,
               boxShadow: '0 24px 60px -20px rgb(0 0 0 / .75)',
             }}
           >
-            <div className="overflow-y-auto max-h-[min(70vh,28rem)]">
+            <div className="overflow-y-auto min-h-0">
               {localMatches.length > 0 && (
                 <div className="border-b border-white/10">
                   <p className="px-3.5 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">
@@ -273,7 +275,7 @@ export function SearchBar({
 
               {query.trim().length >= 2 && (
                 <div>
-                  <div className="px-3.5 pt-3 pb-1.5 flex items-center justify-between gap-2">
+                  <div className="px-3.5 pt-3 pb-1.5 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[10px] font-bold uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">
                       From the internet
                     </p>

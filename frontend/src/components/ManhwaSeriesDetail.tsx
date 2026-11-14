@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addPornhwadbToShelf } from '../lib/addPornhwadbItem'
 import { chartCoverUrl } from '../lib/manhwaCharts'
-import { getPornhwadbSeries, getPornhwadbSimilar, type PornhwaSeries, type SimilarSeries } from '../lib/pornhwadb'
+import { spiceTags, teaseLine } from '../lib/manhwaHeat'
+import { fetchPornhwadbExportImages, getPornhwadbSeries, getPornhwadbSimilar, proxiedPornhwaCover, type PornhwaSeries, type SimilarSeries } from '../lib/pornhwadb'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { STATUS_LABELS } from '../types/media'
+import { ManhwaStills } from './ManhwaStills'
 import { useToast } from './Toast'
 import {
   BackPill,
@@ -74,6 +76,13 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
     enabled: !!series.data,
   })
 
+  const portraits = useQuery({
+    queryKey: ['pornhwadb-portraits', slug],
+    queryFn: () => fetchPornhwadbExportImages(slug),
+    staleTime: 30 * 60 * 1000,
+    enabled: !!series.data,
+  })
+
   const shelfItem = useMemo(() => {
     return (
       shelf.find(
@@ -122,6 +131,9 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
   const row = series.data
   const cover = chartCoverUrl(row.coverImage)
   const synopsis = cleanSynopsis(row.description)
+  const temptation = teaseLine(row.description, 180)
+  const hotTags = spiceTags(row.tags)
+  const characters = (portraits.data?.items ?? []).filter((item) => item.kind === 'character').slice(0, 16)
   const rating = row.averageRating != null ? Number(row.averageRating) : null
   const ratingCount = row.totalRatings ?? 0
   const links = row.externalLinks.filter((l) => l.url)
@@ -164,6 +176,7 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
               {row.alternativeTitles.length > 0 && (
                 <p className="mt-1.5 text-sm text-white/60 truncate">{row.alternativeTitles.slice(0, 3).join(' · ')}</p>
               )}
+              {temptation && <p className="mt-3 text-sm text-rose-100/90 leading-relaxed max-w-xl">{temptation}</p>}
             </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-6 gap-y-3">
@@ -176,11 +189,19 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
 
             {row.tags.length > 0 && (
               <div className="flex flex-wrap justify-center sm:justify-start gap-1.5">
-                {row.tags.slice(0, 5).map((g) => (
-                  <span key={g} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 text-white border border-white/15 backdrop-blur-sm">
+                {hotTags.map((g) => (
+                  <span key={g} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-500/85 text-white">
                     {g}
                   </span>
                 ))}
+                {row.tags
+                  .filter((g) => !hotTags.includes(g))
+                  .slice(0, 4)
+                  .map((g) => (
+                    <span key={g} className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/10 text-white border border-white/15 backdrop-blur-sm">
+                      {g}
+                    </span>
+                  ))}
               </div>
             )}
 
@@ -217,8 +238,27 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="space-y-6 min-w-0">
           {synopsis && <Synopsis text={synopsis} open={synopsisOpen} onToggle={() => setSynopsisOpen((o) => !o)} />}
+          <ManhwaStills series={row} />
+
+          {characters.length > 0 && (
+            <Section title="Faces in this story">
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {characters.map((person) => (
+                  <figure key={person.id} className="w-[118px] shrink-0">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-slate-900 ring-1 ring-rose-400/20">
+                      <img src={proxiedPornhwaCover(person.url)} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    </div>
+                    <figcaption className="mt-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">
+                      {person.label}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {similar.isLoading && <div className="h-56 rounded-2xl bg-slate-200/50 dark:bg-white/[0.05] animate-pulse" />}
+          <SimilarRow title="Same kink" items={similar.data?.sameKink ?? []} />
           <SimilarRow title="Similar storyline" items={similar.data?.storyline ?? []} />
           <SimilarRow title="Shares these tags" items={similar.data?.sharedTags ?? []} />
         </div>

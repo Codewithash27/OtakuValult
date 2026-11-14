@@ -53,6 +53,14 @@ ALLOWED: list[tuple[re.Pattern, re.Pattern]] = [
         re.compile(r"^images\.pornhwadb\.com$"),
         re.compile(r"^/(covers|characters|avatars)/[\w./-]+\.(webp|jpe?g|png)$", re.IGNORECASE),
     ),
+    (
+        re.compile(r"^(img\.)?xbooru\.com$"),
+        re.compile(r"^/(images|samples|thumbnails)/[\w/.-]+\.(jpe?g|png|gif|webp)$", re.IGNORECASE),
+    ),
+    (
+        re.compile(r"^tbib\.org$"),
+        re.compile(r"^/(images|samples|thumbnails)/[\w/.-]+\.(jpe?g|png|gif|webp)$", re.IGNORECASE),
+    ),
 ]
 
 
@@ -66,9 +74,14 @@ def is_allowed_image_url(url: str) -> bool:
 
 
 def _headers_for(url: str) -> dict:
-    # Gelbooru's image servers answer with an HTML page unless the request comes from gelbooru.com.
-    if httpx.URL(url).host.endswith(".gelbooru.com"):
+    host = httpx.URL(url).host
+    # These boards answer with an HTML page unless the request comes from the site itself.
+    if host.endswith(".gelbooru.com"):
         return {**HEADERS, "Referer": "https://gelbooru.com/"}
+    if host.endswith("xbooru.com"):
+        return {**HEADERS, "Referer": "https://xbooru.com/"}
+    if host.endswith("tbib.org"):
+        return {**HEADERS, "Referer": "https://tbib.org/"}
     return HEADERS
 
 

@@ -99,19 +99,18 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
   const label = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5'
 
   return createPortal(
-    <>
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      role="dialog"
+      aria-labelledby="add-dialog-title"
+    >
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] animate-[fadeIn_.25s_ease]"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_.25s_ease]"
         onClick={onClose}
         role="presentation"
       />
-      <div
-        className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none"
-        role="dialog"
-        aria-labelledby="add-dialog-title"
-      >
-        <div className="pointer-events-auto card-ring glass-strong rounded-3xl max-w-sm w-full max-h-[calc(100vh-2rem)] overflow-y-auto shadow-[0_30px_80px_-20px_rgba(124,58,237,.6)] animate-fade-up">
-          <div className="relative overflow-hidden rounded-t-3xl">
+      <div className="relative card-ring glass-strong w-full sm:max-w-sm max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-[0_30px_80px_-20px_rgba(124,58,237,.6)] animate-fade-up">
+          <div className="relative overflow-hidden shrink-0">
             {result.poster_url && (
               <img src={result.poster_url} alt="" className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-40" />
             )}
@@ -137,7 +136,7 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
             </div>
           </div>
 
-          <div className="space-y-4 px-5 pb-5">
+          <div className="space-y-4 px-5 py-4 overflow-y-auto">
             {(synopsisLoading || synopsis) && (
               <div>
                 <p className={label}>About</p>
@@ -173,13 +172,13 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
               <label className={label}>
                 Rating {ratingNum ? <span className="text-amber-400">· {ratingNum}/10</span> : <span className="normal-case font-medium">(optional)</span>}
               </label>
-              <div className="flex items-center justify-between px-1">
+              <div className="grid grid-cols-10 gap-0.5">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setRating(ratingNum === n ? '' : String(n))}
-                    className={`text-lg leading-none transition-all hover:scale-150 ${
+                    className={`text-base sm:text-lg leading-none transition-transform hover:scale-125 ${
                       n <= ratingNum ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,.7)]' : 'text-slate-300 dark:text-slate-600'
                     }`}
                     aria-label={`Rate ${n}`}
@@ -189,24 +188,22 @@ export function AddFromSearchDialog({ result, isOpen, onClose }: AddFromSearchDi
                 ))}
               </div>
             </div>
-
-            {/* Buttons */}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={onClose}
-                disabled={isPending}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button onClick={handleSave} disabled={isPending} className="btn-glow flex-1 !py-2.5 text-sm disabled:cursor-not-allowed">
-                {isPending ? 'Adding...' : '+ Add to shelf'}
-              </button>
-            </div>
           </div>
-        </div>
+
+          <div className="shrink-0 flex gap-2 p-4 border-t border-slate-200/70 dark:border-white/10">
+            <button
+              onClick={onClose}
+              disabled={isPending}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={isPending} className="btn-glow flex-1 !py-2.5 text-sm disabled:cursor-not-allowed">
+              {isPending ? 'Adding...' : '+ Add to shelf'}
+            </button>
+          </div>
       </div>
-    </>,
+    </div>,
     document.body
   )
 }

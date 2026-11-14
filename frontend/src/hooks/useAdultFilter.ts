@@ -97,9 +97,11 @@ export function useItemMeta(items: MediaItem[]) {
   return useCallback(
     (item: MediaItem): MediaMeta | undefined => {
       const id = anilistId(item)
-      if (id !== null) return meta[String(id)]
-      const tags = catalogueTagsFor(item, catalogue)
-      return tags ? { a: true, t: tags } : undefined
+      const fromList = id !== null ? meta[String(id)] : undefined
+      const fromCat = catalogueTagsFor(item, catalogue)
+      const tags = mergeTagNames(fromList?.t, fromCat)
+      if (!fromList && !tags.length) return undefined
+      return { a: fromList?.a ?? true, t: tags }
     },
     [meta, catalogue]
   )
@@ -107,24 +109,36 @@ export function useItemMeta(items: MediaItem[]) {
 
 type CatalogueTags = { bySlug: Record<string, string[]>; byTitle: Record<string, string[]> }
 
+function mergeTagNames(primary: string[] | undefined, extra: string[] | undefined): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const tag of [...(primary ?? []), ...(extra ?? [])]) {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+  }
+  return out
+}
+
 function catalogueTagsFor(item: MediaItem, cat: CatalogueTags | undefined): string[] | undefined {
-  if (!cat) return undefined
+  if (!cat || item.media_type !== 'manhwa') return undefined
   if (item.source === 'pornhwadb' && item.external_id) {
     const tags = cat.bySlug[item.external_id.toLowerCase()]
-    if (tags) return tags
+    if (tags?.length) return tags
   }
-  return item.media_type === 'manhwa' ? cat.byTitle[titleKey(item.title)] : undefined
+  return cat.byTitle[titleKey(item.title)]
 }
 
 const titleKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-/** Catalogue (PornhwaDB) tags for shelf manhwa that have no AniList id, by slug or title. */
+/** Catalogue tags for shelf manhwa, including AniList titles matched by name. */
 function useCatalogueTags(items: MediaItem[]) {
   const { slugs, titles } = useMemo(() => {
     const s = new Set<string>()
     const t = new Set<string>()
     for (const i of items) {
-      if (anilistId(i) !== null || i.media_type !== 'manhwa') continue
+      if (i.media_type !== 'manhwa') continue
       if (i.source === 'pornhwadb' && i.external_id) s.add(i.external_id.toLowerCase())
       t.add(titleKey(i.title))
     }

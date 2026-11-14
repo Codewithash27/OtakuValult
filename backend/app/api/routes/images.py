@@ -4,6 +4,7 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import Response
 
+from app.services.explicit_feed import QueryRejected, search_explicit
 from app.services.gelbooru import GelbooruAuthError, search_posts, search_posts_by_tag_query, tag_query_from_titles
 from app.services.web_image_search import search_web_images, web_image_search_configured, web_image_search_providers
 from app.services.image_proxy import fetch_image, is_allowed_image_url
@@ -126,8 +127,23 @@ async def gelbooru_list(
         raise HTTPException(status_code=502, detail="Gelbooru is not responding")
 
 
+@router.get("/images/explicit")
+async def explicit_list(
+    kind: str = Query("anime", pattern="^(anime|manhwa)$"),
+    q: str = Query("", max_length=80),
+    page: int = Query(1, ge=1, le=40),
+) -> dict:
+    """Explicit anime or manhwa stills from free boards. No API key. Minor tags are dropped."""
+    try:
+        return await search_explicit(kind, q, page)
+    except QueryRejected as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(status_code=502, detail="The free image source is not responding")
+
+
 @router.get("/images/proxy")
-async def proxy_image(url: str = Query(..., max_length=300)) -> Response:
+async def proxy_image(url: str = Query(..., max_length=2000)) -> Response:
     """Image bytes from an allowed source, for images browsers can't download directly (no CORS)."""
     if not is_allowed_image_url(url):
         raise HTTPException(status_code=400, detail="Only images from the finder's sources are allowed")

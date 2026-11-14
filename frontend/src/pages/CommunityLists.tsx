@@ -1,20 +1,24 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useContentMode } from '../hooks/useAdultFilter'
+import { useContentMode, useItemMeta } from '../hooks/useAdultFilter'
+import { useGalleryBlur } from '../hooks/usePanelAccess'
 import { isBackendConfigured } from '../lib/api'
 import { ManhwaSeriesDetail } from '../components/ManhwaSeriesDetail'
 import { ChipScroller } from '../components/ChipScroller'
 import {
   chartCoverUrl,
-  chartSortLabel,
+  fetchChartMembership,
   fetchManhwaChartPage,
   fetchManhwaChartTags,
   formatRatingOutOf5,
   type ManhwaChartSort,
+  type ManhwaHeat,
   type RankedManhwa,
 } from '../lib/manhwaCharts'
+import { heatOf, sortSpiceFirst, spiceTags, teaseLine } from '../lib/manhwaHeat'
 import { pornhwadbStatus } from '../lib/pornhwadb'
+import { detailHref, type MediaItem } from '../types/media'
 
 import { useMediaItems } from '../hooks/useMediaItems'
 
@@ -23,8 +27,10 @@ function listBackSearchParams(params: URLSearchParams): string {
   const next = new URLSearchParams()
   const sort = params.get('sort')
   const tag = params.get('tag')
+  const heat = params.get('heat')
   if (sort) next.set('sort', sort)
   if (tag) next.set('tag', tag)
+  if (heat) next.set('heat', heat)
   const q = next.toString()
   return q ? `?${q}` : ''
 }
@@ -35,51 +41,81 @@ const RANK_STYLE: Record<number, string> = {
   3: 'bg-gradient-to-br from-orange-300 to-orange-700 text-orange-950',
 }
 
-function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string }) {
-  const { data: shelf = [] } = useMediaItems()
-  const inVault = shelf.some(
-    (i) => (i.source === 'pornhwadb' && i.external_id === item.slug) || (i.title && i.title.toLowerCase() === item.title.toLowerCase())
-  )
-  const cover = chartCoverUrl(item.coverImage)
+function RankedCard({
+  item,
+  listQuery,
+  inVault,
+  blurUntilHover,
+  href,
+  rankLabel,
+  coverSrc,
+}: {
+  item: RankedManhwa
+  listQuery: string
+  inVault: boolean
+  blurUntilHover: boolean
+  href?: string
+  rankLabel?: string
+  coverSrc?: string | null
+}) {
+  const cover = coverSrc === undefined ? chartCoverUrl(item.coverImage) : coverSrc
+  const hot = spiceTags(item.tags)
+  const tease = teaseLine(item.description, 90)
   const ratings =
     item.totalRatings === 1 ? '1 rating' : `${(item.totalRatings ?? 0).toLocaleString()} ratings`
 
   return (
     <Link
-      to={`/community-lists/series/${encodeURIComponent(item.slug)}${listQuery}`}
+      to={href ?? `/community-lists/series/${encodeURIComponent(item.slug)}${listQuery}`}
       className="group block text-left lift"
     >
-      <div className="poster-shine relative rounded-2xl overflow-hidden ring-1 ring-white/10 group-hover:ring-lantern-400/60 group-hover:shadow-[0_20px_45px_-18px_rgba(249,138,7,.6)] transition-all duration-300 bg-slate-900">
+      <div className="poster-shine relative rounded-2xl overflow-hidden ring-1 ring-rose-200/20 group-hover:ring-rose-400/70 group-hover:shadow-[0_20px_45px_-18px_rgba(244,63,94,.55)] transition-all duration-300 bg-slate-950">
         <span
           className={`absolute top-2 left-2 z-10 min-w-[30px] h-[26px] px-2 grid place-items-center rounded-lg text-[11px] font-extrabold tabular-nums backdrop-blur-sm ${
             RANK_STYLE[item.rank] ?? 'bg-black/70 text-white'
           }`}
         >
-          #{item.rank}
+          {rankLabel ?? `#${item.rank}`}
         </span>
-        <div className="absolute inset-x-0 bottom-0 z-[1] h-1/3 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <span className="absolute bottom-2 left-2 z-[2] text-[11px] font-bold text-lantern-200 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-          ★ {formatRatingOutOf5(item.averageRating)}
-        </span>
+        {hot.length > 0 && (
+          <span className="absolute top-2 right-2 z-10 px-1.5 py-0.5 rounded-md bg-rose-600/90 text-[10px] font-bold text-white">
+            18+
+          </span>
+        )}
         {inVault && (
-          <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-md bg-emerald-950/85 text-[10px] font-bold text-emerald-300 border border-emerald-500/40 backdrop-blur-sm">
+          <span
+            className={`absolute right-2 z-10 px-2 py-0.5 rounded-md bg-emerald-950/85 text-[10px] font-bold text-emerald-300 border border-emerald-500/40 backdrop-blur-sm ${
+              hot.length > 0 ? 'top-9' : 'top-2'
+            }`}
+          >
             In Vault
           </span>
         )}
+        <div className="absolute inset-x-0 bottom-0 z-[1] h-2/5 bg-gradient-to-t from-black via-black/70 to-transparent" />
+        <div className="absolute inset-x-2 bottom-2 z-[2] flex flex-wrap gap-1">
+          {hot.slice(0, 2).map((tag) => (
+            <span key={tag} className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/80 text-white">
+              {tag}
+            </span>
+          ))}
+        </div>
         {cover ? (
           <img
             src={cover}
             alt=""
-            className="aspect-[3/4] w-full object-cover group-hover:scale-[1.06] transition-transform duration-500"
+            className={`aspect-[3/4] w-full object-cover group-hover:scale-[1.06] transition duration-500 ${
+              blurUntilHover ? 'blur-md scale-105 group-hover:blur-0 group-focus-visible:blur-0' : ''
+            }`}
             loading="lazy"
           />
         ) : (
           <div className="aspect-[3/4] grid place-items-center text-3xl text-slate-600">📖</div>
         )}
       </div>
-      <h3 className="font-bold text-sm mt-2.5 line-clamp-2 leading-snug text-slate-900 dark:text-white group-hover:text-lantern-500 dark:group-hover:text-lantern-300 transition-colors">
+      <h3 className="font-bold text-sm mt-2.5 line-clamp-2 leading-snug text-slate-900 dark:text-white group-hover:text-rose-500 dark:group-hover:text-rose-300 transition-colors">
         {item.title}
       </h3>
+      {tease && <p className="text-[11px] text-rose-700/80 dark:text-rose-200/80 mt-1 line-clamp-2 leading-snug">{tease}</p>}
       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
         {formatRatingOutOf5(item.averageRating)} · {ratings}
       </p>
@@ -88,11 +124,11 @@ function RankedCard({ item, listQuery }: { item: RankedManhwa; listQuery: string
 }
 
 function ChartHeader({ sort }: { sort: ManhwaChartSort }) {
-  const title = sort === 'top-rated' ? 'Top rated pornhwa' : `${chartSortLabel(sort)} manhwa`
+  const title = sort === 'top-rated' ? 'After dark' : sort === 'trending' ? 'Hot right now' : 'Just added'
   const blurb =
     sort === 'top-rated'
-      ? 'Official top 100 from PornhwaDB. Tap a title for info and tags, or add it to your manhwa list.'
-      : 'From your export file — tap for details. Yuri / BL excluded from charts.'
+      ? '18+ manhwa, uncovered. Pick a heat, then a cover.'
+      : 'From your private catalogue. Yuri and BL stay off these charts.'
 
   return (
     <div className="flex flex-wrap items-start gap-4">
@@ -100,7 +136,7 @@ function ChartHeader({ sort }: { sort: ManhwaChartSort }) {
         <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">
           {title}{' '}
           <span className="text-xs font-semibold align-middle px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400">
-            Creamy
+            18+
           </span>
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">{blurb}</p>
@@ -135,9 +171,24 @@ function ManhwaTopList() {
   const sort = (params.get('sort') as ManhwaChartSort) || 'top-rated'
   const safeSort: ManhwaChartSort =
     sort === 'trending' || sort === 'recent' ? sort : 'top-rated'
+  const heatParam = params.get('heat')
+  const heat: ManhwaHeat | null =
+    heatParam === 'soft' || heatParam === 'steamy' || heatParam === 'explicit' ? heatParam : null
   const selectedTag = params.get('tag')
   const [page, setPage] = useState(1)
   const listQuery = listBackSearchParams(params)
+  const [blurAdult] = useGalleryBlur()
+  const { data: shelf = [] } = useMediaItems()
+  const tagsOf = useItemMeta(shelf)
+  const titleKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const vaultKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const item of shelf) {
+      if (item.source === 'pornhwadb' && item.external_id) keys.add(item.external_id)
+      if (item.title) keys.add(item.title.toLowerCase())
+    }
+    return keys
+  }, [shelf])
 
   const status = useQuery({
     queryKey: ['pornhwadb-status'],
@@ -150,24 +201,93 @@ function ManhwaTopList() {
   })
 
   const tagCounts = useQuery({
-    queryKey: ['manhwa-chart-tags', safeSort],
-    queryFn: () => fetchManhwaChartTags(safeSort),
+    queryKey: ['manhwa-chart-tags', safeSort, heat],
+    queryFn: () => fetchManhwaChartTags(safeSort, 48, heat),
     enabled: !!status.data?.configured && isBackendConfigured(),
     staleTime: 10 * 60 * 1000,
   })
 
   const list = useQuery({
-    queryKey: ['manhwa-chart', safeSort, page, selectedTag],
-    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag),
+    queryKey: ['manhwa-chart', safeSort, page, selectedTag, heat],
+    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag, heat),
     enabled: !!status.data?.configured && isBackendConfigured(),
     staleTime: 10 * 60 * 1000,
   })
+
+  const tonight = useQuery({
+    queryKey: ['manhwa-tonight', safeSort],
+    queryFn: () => fetchManhwaChartPage(1, safeSort, 12, null, 'explicit'),
+    enabled: !!status.data?.configured && isBackendConfigured() && page === 1 && heat !== 'explicit',
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const membership = useQuery({
+    queryKey: ['manhwa-chart-membership', safeSort],
+    queryFn: () => fetchChartMembership(safeSort),
+    enabled: !!status.data?.configured && isBackendConfigured(),
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const added = useMemo(() => {
+    const slugs = new Set((membership.data?.slugs ?? []).map((slug) => slug.toLowerCase()))
+    const titles = new Set(membership.data?.titles ?? [])
+    if (!membership.data) return []
+    const seen = new Set<string>()
+    const extras: { item: MediaItem; tags: string[] }[] = []
+    for (const item of shelf) {
+      if (item.media_type !== 'manhwa') continue
+      const tags = tagsOf(item)?.t ?? []
+      if (!tags.length) continue
+      const slug = item.source === 'pornhwadb' && item.external_id ? item.external_id.toLowerCase() : ''
+      const title = titleKey(item.title)
+      if ((slug && slugs.has(slug)) || (title && titles.has(title))) continue
+      if (heat && heatOf(tags) !== heat) continue
+      const id = slug || title || item.id
+      if (seen.has(id)) continue
+      seen.add(id)
+      extras.push({ item, tags })
+    }
+    return extras
+  }, [shelf, tagsOf, membership.data, heat])
+
+  const spiceChips = useMemo(() => {
+    const extra = new Map<string, { name: string; count: number }>()
+    for (const row of added) {
+      const seen = new Set<string>()
+      for (const tag of row.tags) {
+        const key = tag.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        const prev = extra.get(key)
+        if (prev) prev.count += 1
+        else extra.set(key, { name: tag, count: 1 })
+      }
+    }
+    const merged = new Map<string, { name: string; count: number }>()
+    for (const row of tagCounts.data ?? []) merged.set(row.name.toLowerCase(), { ...row })
+    for (const [key, row] of extra) {
+      const prev = merged.get(key)
+      if (prev) prev.count += row.count
+      else merged.set(key, row)
+    }
+    return sortSpiceFirst([...merged.values()])
+  }, [tagCounts.data, added])
 
   const setSort = (next: ManhwaChartSort) => {
     setParams((prev) => {
       const n = new URLSearchParams(prev)
       if (next === 'top-rated') n.delete('sort')
       else n.set('sort', next)
+      return n
+    })
+    setPage(1)
+  }
+
+  const setHeat = (next: ManhwaHeat | null) => {
+    setParams((prev) => {
+      const n = new URLSearchParams(prev)
+      if (!next) n.delete('heat')
+      else n.set('heat', next)
       return n
     })
     setPage(1)
@@ -208,31 +328,54 @@ function ManhwaTopList() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 rounded-3xl bg-gradient-to-b from-rose-950/30 via-transparent to-transparent px-1 py-4 sm:px-2">
       <ChartHeader sort={safeSort} />
 
-      <div className="glass rounded-2xl p-2 flex flex-col md:flex-row md:items-center gap-2 sticky top-[4.5rem] z-20">
-        <div className="flex shrink-0 p-1 gap-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/25">
-          {(
-            [
-              ['top-rated', '⭐ Top rated'],
-              ['trending', '⚡ Trending'],
-              ['recent', '🕐 New'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSort(id)}
-              className={`px-3 h-8 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-300 ${
-                safeSort === id ? 'chip-active' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="glass rounded-2xl p-2 flex flex-col gap-2 sticky top-[4.5rem] z-20">
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <div className="flex shrink-0 p-1 gap-1 rounded-xl bg-slate-900/[0.04] dark:bg-black/25">
+            {(
+              [
+                ['top-rated', 'Top'],
+                ['trending', 'Hot right now'],
+                ['recent', 'Just added'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSort(id)}
+                className={`px-3 h-8 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-300 ${
+                  safeSort === id ? 'chip-active' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="hidden md:block w-px h-6 bg-slate-200 dark:bg-white/10" />
+          <div className="flex shrink-0 p-1 gap-1 rounded-xl bg-rose-500/10">
+            {(
+              [
+                [null, 'All heats'],
+                ['soft', 'Soft'],
+                ['steamy', 'Steamy'],
+                ['explicit', 'Explicit'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setHeat(id)}
+                className={`px-3 h-8 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-300 ${
+                  heat === id ? 'bg-rose-500 text-white' : 'text-rose-700 dark:text-rose-200 hover:bg-rose-500/15'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="hidden md:block w-px h-6 bg-slate-200 dark:bg-white/10" />
         <ChipScroller label="Tags" className="flex-1">
           <button
             type="button"
@@ -249,7 +392,7 @@ function ManhwaTopList() {
             All
           </button>
           {tagCounts.isLoading && <span className="text-xs text-slate-500">Loading tags…</span>}
-          {(tagCounts.data ?? []).map(({ name, count }) => (
+          {(spiceChips).map(({ name, count }) => (
             <button
               key={name}
               type="button"
@@ -262,6 +405,24 @@ function ManhwaTopList() {
         </ChipScroller>
       </div>
 
+      {page === 1 && heat !== 'explicit' && (tonight.data?.items.length ?? 0) > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-bold text-rose-700 dark:text-rose-200">Tonight</h2>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+            {tonight.data!.items.map((item) => (
+              <div key={item.slug} className="w-[140px] shrink-0 snap-start">
+                <RankedCard
+                  item={item}
+                  listQuery={listQuery}
+                  inVault={vaultKeys.has(item.slug) || vaultKeys.has(item.title.toLowerCase())}
+                  blurUntilHover={blurAdult}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {list.isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-3 gap-y-6">
           {Array.from({ length: UI_PAGE_SIZE }, (_, i) => (
@@ -273,16 +434,55 @@ function ManhwaTopList() {
         </div>
       ) : list.error ? (
         <p className="text-rose-500 text-sm">{(list.error as Error).message}</p>
-      ) : !list.data?.items.length ? (
+      ) : !list.data?.items.length && added.length === 0 ? (
         <p className="text-sm text-slate-500 py-12 text-center">No titles match this filter.</p>
       ) : (
         <>
           <div
-            key={`${safeSort}-${page}-${selectedTag ?? ''}`}
+            key={`${safeSort}-${page}-${selectedTag ?? ''}-${heat ?? ''}`}
             className="stagger-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6"
           >
-            {list.data.items.map((item) => (
-              <RankedCard key={`${item.rank}-${item.slug}`} item={item} listQuery={listQuery} />
+            {page === 1 &&
+              added
+                .filter((row) => !selectedTag || row.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase()))
+                .map((row) => {
+                  const href = detailHref(row.item) ?? `/manhwa?item=${row.item.id}`
+                  const ranked: RankedManhwa = {
+                    slug: row.item.external_id || row.item.id,
+                    title: row.item.title,
+                    alternativeTitles: [],
+                    description: null,
+                    status: null,
+                    releaseYear: row.item.year,
+                    totalChapters: row.item.total,
+                    coverImage: null,
+                    averageRating: null,
+                    totalRatings: null,
+                    tags: row.tags,
+                    externalLinks: [],
+                    rank: 0,
+                  }
+                  return (
+                    <RankedCard
+                      key={row.item.id}
+                      item={ranked}
+                      listQuery={listQuery}
+                      inVault
+                      blurUntilHover={blurAdult}
+                      href={href}
+                      rankLabel="Yours"
+                      coverSrc={row.item.poster_url}
+                    />
+                  )
+                })}
+            {list.data?.items.map((item) => (
+              <RankedCard
+                key={`${item.rank}-${item.slug}`}
+                item={item}
+                listQuery={listQuery}
+                inVault={vaultKeys.has(item.slug) || vaultKeys.has(item.title.toLowerCase())}
+                blurUntilHover={blurAdult}
+              />
             ))}
           </div>
 
@@ -297,11 +497,11 @@ function ManhwaTopList() {
             </button>
             <span className="text-sm text-slate-500 tabular-nums px-2">
               Page {page}
-              {list.data.total ? ` · ${list.data.total.toLocaleString()} titles` : ''}
+              {list.data?.total ? ` · ${list.data.total.toLocaleString()} titles` : ''}
             </span>
             <button
               type="button"
-              disabled={!list.data.hasNextPage}
+              disabled={!list.data?.hasNextPage}
               onClick={() => setPage((p) => p + 1)}
               className="chip !px-4 !py-2 !text-xs disabled:opacity-40"
             >

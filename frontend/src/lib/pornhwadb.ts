@@ -53,7 +53,7 @@ export type SimilarSeries = Pick<PornhwaSeries, 'slug' | 'title' | 'coverImage' 
 export async function getPornhwadbSimilar(
   slug: string,
   limit = 10,
-): Promise<{ storyline: SimilarSeries[]; sharedTags: SimilarSeries[] }> {
+): Promise<{ storyline: SimilarSeries[]; sharedTags: SimilarSeries[]; sameKink: SimilarSeries[] }> {
   return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}/similar?limit=${limit}`)
 }
 

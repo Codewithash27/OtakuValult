@@ -5,10 +5,11 @@ import { anilist } from '../lib/importers'
 import { cleanMediaDescription } from '../lib/mediaDescription'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { useAddItem } from '../hooks/useMediaMutations'
-import { STATUS_LABELS, anilistId, type MediaType } from '../types/media'
+import { STATUS_LABELS, anilistId, type MediaItem, type MediaType } from '../types/media'
 import { useToast } from './Toast'
 import { WatchLinks } from './WatchLinks'
 import { CoverCard, InfoRow, Section, Stat, scoreTone } from './TitleDetailParts'
+import { VaultManhwaHeat } from './CreamySeriesHeat'
 
 type Kind = 'anime' | 'manga'
 
@@ -92,10 +93,39 @@ export function AniListTitleDetail({ kind, id }: { kind: Kind; id: number }) {
   const shelfItem = useMemo(() => {
     if (!m) return null
     const names = [m.title.english, m.title.romaji, ...m.synonyms].filter(Boolean).map((t) => t!.toLowerCase())
-    return shelf.find((i) => anilistId(i) === id || names.includes(i.title.toLowerCase())) ?? null
-  }, [shelf, m, id])
+    const sameKind = (i: MediaItem) =>
+      kind === 'anime' ? i.media_type === 'anime' : i.media_type === 'manga' || i.media_type === 'manhwa'
+    return (
+      shelf.find((i) => anilistId(i) === id && sameKind(i)) ??
+      shelf.find((i) => sameKind(i) && names.includes(i.title.toLowerCase())) ??
+      null
+    )
+  }, [shelf, m, id, kind])
 
   const onShelf = shelfItem?.id ?? addedId
+
+  const linkItem = useMemo((): MediaItem | null => {
+    if (!m) return null
+    if (shelfItem) return shelfItem
+    const mediaType: MediaType = m.type === 'ANIME' ? 'anime' : m.countryOfOrigin === 'KR' ? 'manhwa' : 'manga'
+    return {
+      id: `preview:${m.id}`,
+      user_id: '',
+      source: 'anilist',
+      external_id: `${m.type === 'ANIME' ? 'anime' : 'manga'}:${m.id}`,
+      media_type: mediaType,
+      title,
+      poster_url: m.coverImage.large,
+      year: m.startDate.year,
+      status: 'plan_to_watch',
+      rating: null,
+      progress: 0,
+      total: m.type === 'ANIME' ? m.episodes : m.chapters,
+      notes: null,
+      created_at: '',
+      updated_at: '',
+    }
+  }, [m, shelfItem, title])
 
   if (media.isLoading) {
     return (
@@ -281,6 +311,14 @@ export function AniListTitleDetail({ kind, id }: { kind: Kind; id: number }) {
       {/* Body */}
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="space-y-6 min-w-0">
+          {mediaType === 'manhwa' && (
+            <VaultManhwaHeat
+              title={title}
+              extraTitles={[m.title.english, m.title.romaji, m.title.native, ...m.synonyms].filter(
+                (name): name is string => !!name && name !== title,
+              )}
+            />
+          )}
           {synopsis && (
             <Section title="Synopsis">
               <p
@@ -302,7 +340,7 @@ export function AniListTitleDetail({ kind, id }: { kind: Kind; id: number }) {
             </Section>
           )}
 
-          {shelfItem && <WatchLinks item={shelfItem} />}
+          {linkItem && <WatchLinks item={linkItem} />}
 
           {relations.length > 0 && (
             <Section title="Related">

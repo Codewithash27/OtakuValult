@@ -72,6 +72,26 @@ export function proxiedPornhwaCover(url: string): string {
   return apiUrl(`/api/images/proxy?url=${encodeURIComponent(url)}`)
 }
 
+export type InfidelityMark = 'ntr' | 'cuckold' | 'swap' | 'cheating'
+
+export type ActBeat = {
+  start: number
+  end: number | null
+  label: string
+  acts: string[]
+  marks: InfidelityMark[]
+  line: string
+}
+
+export async function fetchSeriesActs(slug: string): Promise<{
+  slug: string
+  title: string
+  blocked: boolean
+  beats: ActBeat[]
+}> {
+  return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}/acts`)
+}
+
 export async function fetchPornhwadbExportImages(slug: string): Promise<{
   total: number
   items: PornhwaExportImage[]

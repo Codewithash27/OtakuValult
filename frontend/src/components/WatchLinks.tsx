@@ -11,6 +11,11 @@ interface OfficialLink {
   color: string | null
 }
 
+interface RawLink extends OfficialLink {
+  type: string
+  isDisabled: boolean | null
+}
+
 /** A button in the box. `color` is a hex colour (AniList) or Tailwind gradient stops. */
 interface LinkButton {
   name: string
@@ -21,21 +26,91 @@ interface LinkButton {
 const MAX_OFFICIAL = 8
 const CUSTOM_COLOR = 'from-violet-500 to-fuchsia-600'
 
-/** Official reading/streaming pages AniList lists for a title, English first. */
-async function fetchOfficialLinks(id: number): Promise<OfficialLink[]> {
-  const data = await anilist<{
-    Media: { externalLinks: (OfficialLink & { type: string; isDisabled: boolean | null })[] } | null
-  }>(`query ($id: Int) { Media(id: $id) { externalLinks { site url type language color isDisabled } } }`, { id })
-  const seen = new Set<string>()
-  const rank = (l: OfficialLink) => (l.language === 'English' ? 0 : l.language ? 2 : 1)
-  return (data.Media?.externalLinks ?? [])
-    .filter((l) => l.type === 'STREAMING' && !l.isDisabled && /^https?:\/\//.test(l.url))
-    .sort((a, b) => rank(a) - rank(b))
-    .filter((l) => {
-      const key = `${l.site}|${l.language ?? ''}`
-      return !seen.has(key) && seen.add(key)
+const LINK_FIELDS = 'site url type language color isDisabled'
+/** Official storefronts. A hit here is the series page, not a search results page. */
+const READER = /webtoon|tapas|tappytoon|lezhin|manta|webnovel|kakao|ridibooks|toomics|manga\s*plus|comikey|azuki|\binkr\b|pocket comics|yen press|\bviz\b|bookwalker|crunchyroll|netflix|hidive|disney|prime video|\bamazon\b|hulu|bilibili/i
+const PREFERRED = ['webtoon', 'tapas', 'tappytoon', 'lezhin', 'manta', 'webnovel', 'kakao', 'manga plus', 'crunchyroll']
+
+const compactTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+
+function sameTitle(wanted: string, candidates: (string | null | undefined)[]) {
+  const w = compactTitle(wanted)
+  if (w.length < 3) return false
+  return candidates.some((t) => {
+    if (!t) return false
+    const c = compactTitle(t)
+    if (c.length < 3) return false
+    return c === w || (Math.min(w.length, c.length) >= 8 && (c.includes(w) || w.includes(c)))
+  })
+}
+
+/** Direct series pages AniList lists. English storefronts come first. */
+function pickLinks(links: RawLink[]): OfficialLink[] {
+  const ranked = links
+    .map((l) => {
+      if (l.isDisabled || l.type === 'SOCIAL' || !/^https?:\/\//.test(l.url)) return null
+      const reader = READER.test(l.site)
+      if (l.type !== 'STREAMING' && !reader) return null
+      const lang = l.language === 'English' ? 0 : l.language ? 30 : 15
+      const site = l.site.toLowerCase()
+      const prefer = PREFERRED.findIndex((p) => site.includes(p))
+      return { link: l, score: (lang + (l.type === 'STREAMING' ? 0 : 8) + (reader ? 0 : 5)) * 100 + (prefer === -1 ? 50 : prefer) }
     })
-    .slice(0, MAX_OFFICIAL)
+    .filter((x): x is { link: RawLink; score: number } => x !== null)
+    .sort((a, b) => a.score - b.score)
+
+  const seen = new Set<string>()
+  const out: OfficialLink[] = []
+  for (const { link } of ranked) {
+    const key = `${link.site}|${link.language ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ site: link.site, url: link.url, language: link.language, color: link.color })
+    if (out.length >= MAX_OFFICIAL) break
+  }
+  return out
+}
+
+async function fetchOfficialLinks(id: number): Promise<OfficialLink[]> {
+  const data = await anilist<{ Media: { externalLinks: RawLink[] } | null }>(
+    `query ($id: Int) { Media(id: $id) { externalLinks { ${LINK_FIELDS} } } }`,
+    { id },
+  )
+  return pickLinks(data.Media?.externalLinks ?? [])
+}
+
+/** For a shelf title that was not imported from AniList, find the same series and use its official page. */
+async function fetchOfficialByTitle(title: string, mediaType: MediaItem['media_type']): Promise<OfficialLink[]> {
+  if (mediaType === 'movie' || mediaType === 'tv' || title.trim().length < 3) return []
+  const type = mediaType === 'anime' ? 'ANIME' : 'MANGA'
+  const countries = mediaType === 'manhwa' ? ['KR', null] : [null]
+  for (const country of countries) {
+    try {
+      const data = await anilist<{
+        Media: {
+          title: { romaji: string | null; english: string | null; native: string | null }
+          synonyms: string[]
+          externalLinks: RawLink[]
+        } | null
+      }>(
+        `query ($search: String, $type: MediaType, $country: CountryCode) {
+          Media(search: $search, type: $type, countryOfOrigin: $country) {
+            title { romaji english native } synonyms externalLinks { ${LINK_FIELDS} }
+          }
+        }`,
+        { search: title, type, country },
+      )
+      const media = data.Media
+      if (!media) continue
+      const names = [media.title.english, media.title.romaji, media.title.native, ...media.synonyms]
+      if (!sameTitle(title, names)) continue
+      const links = pickLinks(media.externalLinks)
+      if (links.length) return links
+    } catch {
+      // AniList says "Not Found" when that country has no match. Try the next one.
+    }
+  }
+  return []
 }
 
 interface Platform {
@@ -140,10 +215,10 @@ export function WatchLinks({ item }: { item: MediaItem }) {
   const isReadable = item.media_type === 'manga' || item.media_type === 'manhwa'
   const alId = anilistId(item)
   const anilistUrl = alId !== null ? `https://anilist.co/${item.media_type === 'anime' ? 'anime' : 'manga'}/${alId}` : null
-  const { data: official = [] } = useQuery({
-    queryKey: ['official-links', alId],
-    queryFn: () => fetchOfficialLinks(alId!),
-    enabled: alId !== null && !savedList,
+  const { data: official = [], isLoading: officialLoading } = useQuery({
+    queryKey: ['official-links', alId ?? `${item.media_type}:${item.title}`],
+    queryFn: () => (alId !== null ? fetchOfficialLinks(alId) : fetchOfficialByTitle(item.title, item.media_type)),
+    enabled: !savedList,
     staleTime: 24 * 60 * 60 * 1000,
   })
 
@@ -202,9 +277,20 @@ export function WatchLinks({ item }: { item: MediaItem }) {
         </div>
       </div>
 
+      {!draft && !savedList && officialLoading && official.length === 0 && (
+        <p className="text-xs text-slate-500">Finding the official page for this title…</p>
+      )}
+
       {customLink && !editing && !draft && (
         <a href={customLink} target="_blank" rel="noopener noreferrer" className="btn-glow w-full !py-2.5">
           {isReadable ? '📖 Continue reading' : '▶ Continue watching'}
+          {item.progress > 0 && <span className="opacity-80 text-xs">· ep/ch {item.progress + 1}</span>}
+        </a>
+      )}
+
+      {!customLink && !draft && !savedList && official[0] && (
+        <a href={official[0].url} target="_blank" rel="noopener noreferrer" className="btn-glow w-full !py-2.5">
+          {isReadable ? '📖 Read' : '▶ Watch'} on {official[0].site}
           {item.progress > 0 && <span className="opacity-80 text-xs">· ep/ch {item.progress + 1}</span>}
         </a>
       )}
@@ -296,14 +382,18 @@ export function WatchLinks({ item }: { item: MediaItem }) {
               ))}
             </div>
           )}
-          {officialButtons.length > 0 && (
-            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 -mb-1">Search elsewhere</p>
+          {officialButtons.length === 0 && !officialLoading && (
+            <>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                No official page is listed for this title yet. Search the stores, or add the page you use.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {searchButtons.map((l) => (
+                  <LinkChip key={l.name} link={l} />
+                ))}
+              </div>
+            </>
           )}
-          <div className="grid grid-cols-2 gap-2">
-            {searchButtons.map((l) => (
-              <LinkChip key={l.name} link={l} />
-            ))}
-          </div>
         </>
       )}
 

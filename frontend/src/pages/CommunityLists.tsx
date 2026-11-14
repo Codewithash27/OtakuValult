@@ -15,6 +15,7 @@ import {
   type ManhwaChartSort,
   type ManhwaHeat,
   type RankedManhwa,
+  type SinRoomId,
 } from '../lib/manhwaCharts'
 import { heatOf, sortSpiceFirst, spiceTags, teaseLine } from '../lib/manhwaHeat'
 import { pornhwadbStatus } from '../lib/pornhwadb'
@@ -31,9 +32,22 @@ function listBackSearchParams(params: URLSearchParams): string {
   if (sort) next.set('sort', sort)
   if (tag) next.set('tag', tag)
   if (heat) next.set('heat', heat)
+  const room = params.get('room')
+  if (room) next.set('room', room)
   const q = next.toString()
   return q ? `?${q}` : ''
 }
+
+const SIN_ROOMS: { id: SinRoomId; title: string; line: string }[] = [
+  { id: 'affair', title: 'The Affair', line: 'Cheating' },
+  { id: 'ntr', title: 'NTR', line: 'Taken' },
+  { id: 'swap', title: 'The Swap', line: 'Partners traded' },
+  { id: 'blackmail', title: 'Blackmail', line: 'Then they give in' },
+  { id: 'dare', title: 'The Dare', line: 'Public, watched' },
+  { id: 'bind', title: 'The Bind', line: 'Tied and rough' },
+]
+
+const ROOM_IDS = new Set<string>(SIN_ROOMS.map((room) => room.id))
 
 const RANK_STYLE: Record<number, string> = {
   1: 'bg-gradient-to-br from-amber-200 to-amber-500 text-amber-950 shadow-[0_0_14px_rgba(251,191,36,.7)]',
@@ -175,6 +189,9 @@ function ManhwaTopList() {
   const heat: ManhwaHeat | null =
     heatParam === 'soft' || heatParam === 'steamy' || heatParam === 'explicit' ? heatParam : null
   const selectedTag = params.get('tag')
+  const roomParam = params.get('room')
+  const room: SinRoomId | null = roomParam && ROOM_IDS.has(roomParam) ? (roomParam as SinRoomId) : null
+  const activeRoom = SIN_ROOMS.find((item) => item.id === room) ?? null
   const [page, setPage] = useState(1)
   const listQuery = listBackSearchParams(params)
   const [blurAdult] = useGalleryBlur()
@@ -208,8 +225,8 @@ function ManhwaTopList() {
   })
 
   const list = useQuery({
-    queryKey: ['manhwa-chart', safeSort, page, selectedTag, heat],
-    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag, heat),
+    queryKey: ['manhwa-chart', safeSort, page, selectedTag, heat, room],
+    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag, heat, room),
     enabled: !!status.data?.configured && isBackendConfigured(),
     staleTime: 10 * 60 * 1000,
   })
@@ -296,8 +313,20 @@ function ManhwaTopList() {
   const toggleTag = (name: string) => {
     setParams((prev) => {
       const n = new URLSearchParams(prev)
+      n.delete('room')
       if (selectedTag === name) n.delete('tag')
       else n.set('tag', name)
+      return n
+    })
+    setPage(1)
+  }
+
+  const setRoom = (next: SinRoomId) => {
+    setParams((prev) => {
+      const n = new URLSearchParams(prev)
+      n.delete('tag')
+      if (room === next) n.delete('room')
+      else n.set('room', next)
       return n
     })
     setPage(1)
@@ -330,6 +359,33 @@ function ManhwaTopList() {
   return (
     <div className="space-y-5 rounded-3xl bg-gradient-to-b from-rose-950/30 via-transparent to-transparent px-1 py-4 sm:px-2">
       <ChartHeader sort={safeSort} />
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold text-rose-700 dark:text-rose-200">Sin rooms</h2>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {SIN_ROOMS.map((item) => {
+            const on = room === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setRoom(item.id)}
+                className={`w-[148px] shrink-0 rounded-2xl px-3 py-3 text-left ring-1 transition ${
+                  on ? 'bg-rose-500 text-white ring-rose-300' : 'bg-black/40 text-rose-100 ring-rose-400/25 hover:ring-rose-400/60'
+                }`}
+              >
+                <span className="block text-sm font-bold">{item.title}</span>
+                <span className={`mt-1 block text-[11px] ${on ? 'text-white/80' : 'text-rose-200/70'}`}>{item.line}</span>
+              </button>
+            )
+          })}
+        </div>
+        {activeRoom && (
+          <p className="text-xs text-rose-700/80 dark:text-rose-200/80">
+            {activeRoom.title} · {list.data?.total ?? '…'} titles. Tap the room again to leave.
+          </p>
+        )}
+      </section>
 
       <div className="glass rounded-2xl p-2 flex flex-col gap-2 sticky top-[4.5rem] z-20">
         <div className="flex flex-col md:flex-row md:items-center gap-2">
@@ -376,7 +432,7 @@ function ManhwaTopList() {
             ))}
           </div>
         </div>
-        <ChipScroller label="Tags" className="flex-1">
+        {!room && <ChipScroller label="Tags" className="flex-1">
           <button
             type="button"
             onClick={() => {
@@ -402,10 +458,10 @@ function ManhwaTopList() {
               {name} <span className="opacity-65 tabular-nums">{count}</span>
             </button>
           ))}
-        </ChipScroller>
+        </ChipScroller>}
       </div>
 
-      {page === 1 && heat !== 'explicit' && (tonight.data?.items.length ?? 0) > 0 && (
+      {page === 1 && !room && heat !== 'explicit' && (tonight.data?.items.length ?? 0) > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-bold text-rose-700 dark:text-rose-200">Tonight</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
@@ -439,10 +495,11 @@ function ManhwaTopList() {
       ) : (
         <>
           <div
-            key={`${safeSort}-${page}-${selectedTag ?? ''}-${heat ?? ''}`}
+            key={`${safeSort}-${page}-${selectedTag ?? ''}-${heat ?? ''}-${room ?? ''}`}
             className="stagger-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6"
           >
             {page === 1 &&
+              !room &&
               added
                 .filter((row) => !selectedTag || row.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase()))
                 .map((row) => {

@@ -7,6 +7,7 @@ import { spiceTags, teaseLine } from '../lib/manhwaHeat'
 import { fetchPornhwadbExportImages, getPornhwadbSeries, getPornhwadbSimilar, proxiedPornhwaCover, type PornhwaSeries, type SimilarSeries } from '../lib/pornhwadb'
 import { useMediaItems } from '../hooks/useMediaItems'
 import { STATUS_LABELS } from '../types/media'
+import { CreamySeriesHeat } from './CreamySeriesHeat'
 import { ManhwaStills } from './ManhwaStills'
 import { useToast } from './Toast'
 import {
@@ -237,6 +238,7 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="space-y-6 min-w-0">
+          <CreamySeriesHeat slug={slug} title={row.title} tags={row.tags} />
           {synopsis && <Synopsis text={synopsis} open={synopsisOpen} onToggle={() => setSynopsisOpen((o) => !o)} />}
           <ManhwaStills series={row} />
 

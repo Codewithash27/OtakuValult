@@ -8,6 +8,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { WatchLinks } from './WatchLinks'
 import { AdultToggle } from './AdultToggle'
 import { TitlePanels } from './TitlePanels'
+import { VaultManhwaHeat } from './CreamySeriesHeat'
 import { useMediaDescription } from '../hooks/useMediaDescription'
 import { anilistId } from '../types/media'
 
@@ -256,6 +257,13 @@ export function ItemDrawer({ item }: ItemDrawerProps) {
                 </p>
               )}
             </div>
+          )}
+
+          {item.media_type === 'manhwa' && (
+            <VaultManhwaHeat
+              title={item.title}
+              slug={item.source === 'pornhwadb' ? item.external_id : null}
+            />
           )}
 
           {(item.media_type === 'manhwa' || item.media_type === 'manga') && (

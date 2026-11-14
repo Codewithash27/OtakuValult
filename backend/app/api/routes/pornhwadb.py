@@ -21,13 +21,14 @@ async def pornhwadb_charts(
     limit: int = Query(24, ge=1, le=50),
     tag: str | None = Query(None, max_length=80),
     heat: str | None = Query(None, pattern="^(soft|steamy|explicit)$"),
+    room: str | None = Query(None, pattern="^(affair|ntr|swap|blackmail|dare|bind)$"),
 ) -> dict:
     if not phdb.is_configured():
         raise HTTPException(
             status_code=503,
             detail="PornhwaDB export not found. Place pornhwa-export.json on the server (see backend/data/README.md).",
         )
-    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag, heat=heat)
+    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag, heat=heat, room=room)
     register_search_image_urls([i["coverImage"] for i in out.get("items") or [] if i.get("coverImage")])
     return out
 
@@ -169,6 +170,17 @@ async def pornhwadb_series_similar(slug: str, limit: int = Query(10, ge=1, le=20
         [c["coverImage"] for c in storyline + shared + same_kink if c.get("coverImage")]
     )
     return {"storyline": storyline, "sharedTags": shared, "sameKink": same_kink}
+
+
+@router.get("/pornhwadb/series/{slug}/acts")
+async def pornhwadb_series_acts(slug: str) -> dict:
+    """Chapter-by-chapter sex acts from the export. School-tagged series return no beats."""
+    if not phdb.is_configured():
+        raise HTTPException(status_code=503, detail="PornhwaDB export not configured")
+    row = phdb.series_acts(slug)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Series not found in export")
+    return row
 
 
 @router.get("/pornhwadb/series/{slug}/images")

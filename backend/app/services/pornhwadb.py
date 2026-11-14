@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -351,6 +352,290 @@ def chart_membership(sort: str = "top-rated") -> dict[str, list[str]]:
     return {"slugs": slugs, "titles": titles}
 
 
+# Sin rooms match series genre tags. School-tagged titles stay out of every room.
+SIN_ROOMS: dict[str, frozenset[str]] = {
+    "affair": frozenset({"cheating", "adulterer", "betrayal"}),
+    "ntr": frozenset({"netorare", "netori", "netorase"}),
+    "swap": frozenset({"swapping", "multiple couples"}),
+    "blackmail": frozenset({"blackmail", "mind control", "corruption"}),
+    "dare": frozenset({"exhibitionism", "voyeur", "voyeurism", "public sex"}),
+    "bind": frozenset({"bdsm"}),
+}
+
+# Chapter-tag noise and tags we do not surface as an "act".
+_ACT_SKIP = frozenset(
+    {
+        "short",
+        "non-continuous",
+        "dream",
+        "imagination",
+        "flashback",
+        "interrupted",
+        "yuri",
+        "bl",
+        "rape",
+    }
+)
+
+
+_MINOR_BEAT = re.compile(
+    r"\b(child|children|kid|kids|loli|shota|underage|preteen|toddler|minor)\b|"
+    r"\byoung\s+(?!woman\b|lady\b|wife\b|man\b|adult\b|couple\b|mother\b|mom\b)|"
+    r"\bage of (?:[1-9]|1[0-7])\b",
+    re.IGNORECASE,
+)
+
+
+_MINOR_TEXT = re.compile(
+    r"kindergarten|elementary|toddler|underage|preteen|\bloli\b|\bshota\b|\bchild\b|\bchildren\b",
+    re.IGNORECASE,
+)
+
+
+def _mentions_minor(series: dict[str, Any]) -> bool:
+    parts = [str(series.get("title") or ""), *(str(t) for t in (series.get("alternativeTitles") or []))]
+    parts.extend(_tag_names(series))
+    return bool(_MINOR_TEXT.search(" ".join(parts)))
+
+
+def _has_youth_tag(series: dict[str, Any]) -> bool:
+    names = {t.lower().strip() for t in _tag_names(series)}
+    return bool(names & _YOUTH_TAGS)
+
+
+def _kept_out(series: dict[str, Any]) -> bool:
+    return _has_youth_tag(series) or _mentions_minor(series)
+
+
+_ROOM_ACTS: dict[str, frozenset[str]] = {
+    "dare": frozenset({"public", "voyeurism", "exhibitionism"}),
+    "bind": frozenset({"bdsm", "spanking", "femdom"}),
+}
+
+
+def _chapter_act_hits(series: dict[str, Any], wanted: frozenset[str]) -> int:
+    hits = 0
+    for chapter in series.get("chapters") or []:
+        if not isinstance(chapter, dict):
+            continue
+        if any(name.lower() in wanted for name in _chapter_act_names(chapter)):
+            hits += 1
+    return hits
+
+
+def series_in_room(series: dict[str, Any], room: str) -> bool:
+    wanted = SIN_ROOMS.get(room)
+    if not wanted or _kept_out(series):
+        return False
+    names = {t.lower().strip() for t in _tag_names(series)}
+    if names & wanted:
+        return True
+    acts = _ROOM_ACTS.get(room)
+    # One stray chapter should not pull a series into the room.
+    return bool(acts and _chapter_act_hits(series, acts) >= 2)
+
+
+def _chapter_act_names(chapter: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for tag in chapter.get("tags") or []:
+        raw = tag.get("name") if isinstance(tag, dict) else tag
+        name = str(raw or "").strip()
+        key = name.lower()
+        if not name or key in seen or key in _ACT_SKIP:
+            continue
+        seen.add(key)
+        names.append(name)
+    return names
+
+
+# Who the sex is with. The couple alone stays unmarked. Another man, or a swap, is marked.
+_OTHER_MAN_TAGS = frozenset({"cuckold", "netorase"})
+_GROUP_TAGS = frozenset({"gangbang", "mmf", "double penetration"})
+_NTR_TAGS = frozenset({"netorare", "netori"})
+_SWAP_TAGS = frozenset({"swapping", "sharing", "netorase"})
+_CHEAT_TAGS = frozenset({"cheating", "affair", "betrayal", "office affair", "adulterer"})
+_OTHER_MAN_TEXT = re.compile(
+    r"stranger|another man|other man|someone else|not her husband|another guy|\bbull\b|"
+    r"\bcuck|\bntr\b|netorare|netori|mc joins later|without the mc",
+    re.IGNORECASE,
+)
+_SWAP_TEXT = re.compile(
+    r"\bswap|wife exchange|partner exchange|exchanged|traded wives|traded partners|couples? swap",
+    re.IGNORECASE,
+)
+
+
+def _gender_of(description: str) -> str:
+    """Best-effort m/f from a catalogue bio. Unknown stays u."""
+    head = (description or "").lower()[:180]
+    if re.search(r"\bshe\b", head):
+        return "f"
+    if re.search(r"\b(a man|he is|he's)\b", head):
+        return "m"
+    if re.search(r"'s wife\b|\bgirlfriend\b", head):
+        return "f"
+    if re.search(r"\bhe\b", head):
+        return "m"
+    return "u"
+
+
+def _series_people(raw: dict[str, Any]) -> dict[str, dict[str, str]]:
+    people: dict[str, dict[str, str]] = {}
+    for person in raw.get("characters") or []:
+        if not isinstance(person, dict) or not person.get("name"):
+            continue
+        name = str(person["name"])
+        people[name] = {
+            "name": name,
+            "role": str(person.get("role") or ""),
+            "gender": _gender_of(str(person.get("description") or "")),
+        }
+    return people
+
+
+def _chapter_people(chapter: dict[str, Any], people: dict[str, dict[str, str]]) -> list[dict[str, str]]:
+    present: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for person in chapter.get("characters") or []:
+        if not isinstance(person, dict) or not person.get("name"):
+            continue
+        name = str(person["name"])
+        if name in seen:
+            continue
+        seen.add(name)
+        known = people.get(name) or {}
+        present.append(
+            {
+                "name": name,
+                "role": str(person.get("role") or known.get("role") or ""),
+                "gender": known.get("gender") or "u",
+            }
+        )
+    return present
+
+
+def _pairing(
+    present: list[dict[str, str]],
+    people: dict[str, dict[str, str]],
+    *,
+    series_is_swap: bool,
+    series_is_ntr: bool,
+) -> tuple[str, list[str]]:
+    """Who is with whom. The couple alone is unmarked. Someone else with her is marked."""
+    mains = [person for person in people.values() if person["role"].lower() == "main"]
+    male_main = next((person for person in mains if person["gender"] == "m"), None)
+    female_main = next((person for person in mains if person["gender"] == "f"), None)
+    if male_main and female_main:
+        couple = {male_main["name"], female_main["name"]}
+    else:
+        couple = {person["name"] for person in mains}
+    male_name = male_main["name"] if male_main else ""
+    female_name = female_main["name"] if female_main else ""
+    names = {person["name"] for person in present}
+    outsiders = [person for person in present if person["name"] not in couple]
+    other_men = [person for person in outsiders if person["gender"] != "f"]
+    other_women = [person for person in outsiders if person["gender"] == "f"]
+    only_couple = bool(couple) and bool(names) and names <= couple
+    other_with_her = bool(female_name) and female_name in names and bool(other_men)
+
+    pairs: list[str] = []
+    if other_with_her:
+        pairs.append(f"{female_name} with {other_men[0]['name']}")
+    if male_name and male_name in names and other_women:
+        pairs.append(f"{male_name} with {other_women[0]['name']}")
+    if not pairs and only_couple:
+        ordered = [person["name"] for person in present if person["name"] in couple]
+        pairs.append(" with ".join(ordered[:2]))
+    elif not pairs and len(present) >= 2:
+        pairs.append(f"{present[0]['name']} with {present[1]['name']}")
+    elif not pairs and present:
+        pairs.append(present[0]["name"])
+
+    marks: list[str] = []
+    if only_couple:
+        return " · ".join(pairs), marks
+    if other_with_her or (outsiders and series_is_ntr and not other_women):
+        marks.append("cuckold")
+        if series_is_ntr:
+            marks.append("ntr")
+    if series_is_swap and outsiders:
+        marks.append("swap")
+    elif other_with_her and "cuckold" not in marks:
+        marks.append("cuckold")
+    return " · ".join(pairs), list(dict.fromkeys(marks))
+
+
+def _chapter_marks(acts: list[str], line: str, *, series_is_swap: bool, series_is_ntr: bool) -> list[str]:
+    """Couple-only chapters stay empty. Another man, or a partner swap, is marked."""
+    keys = {act.lower() for act in acts}
+    text_other = bool(line and _OTHER_MAN_TEXT.search(line))
+    text_swap = bool(line and _SWAP_TEXT.search(line))
+    group = bool(keys & _GROUP_TAGS)
+    other_man = bool(keys & (_OTHER_MAN_TAGS | _NTR_TAGS)) or text_other or (group and (series_is_ntr or series_is_swap))
+    swapped = bool(keys & _SWAP_TAGS) or text_swap or (series_is_swap and (other_man or group))
+    marks: list[str] = []
+    if keys & _NTR_TAGS or (other_man and series_is_ntr and not swapped):
+        marks.append("ntr")
+    if other_man:
+        marks.append("cuckold")
+    if swapped:
+        marks.append("swap")
+    if keys & _CHEAT_TAGS:
+        marks.append("cheating")
+    return list(dict.fromkeys(marks))
+
+
+def series_acts(slug: str) -> dict[str, Any] | None:
+    """Chapter beats labeled with the sex acts tagged on that stretch. Youth-tagged series are empty."""
+    raw = _find_series_raw(slug)
+    if not raw:
+        return None
+    title = str(raw.get("title") or "Untitled")
+    if _kept_out(raw):
+        return {"slug": raw.get("slug"), "title": title, "blocked": True, "beats": []}
+
+    series_tags = {name.lower().strip() for name in _tag_names(raw)}
+    series_is_swap = bool(series_tags & {"swapping", "multiple couples"})
+    series_is_ntr = bool(series_tags & {"netorare", "netori", "netorase", "cuckold", "cheating", "adulterer"})
+    people = _series_people(raw)
+    beats: list[dict[str, Any]] = []
+    for chapter in raw.get("chapters") or []:
+        if not isinstance(chapter, dict):
+            continue
+        acts = _chapter_act_names(chapter)
+        present = _chapter_people(chapter, people)
+        if not acts and len(present) < 2:
+            continue
+        start = chapter.get("chapterStart")
+        end = chapter.get("chapterEnd")
+        if start is None:
+            continue
+        start_n = int(start)
+        end_n = int(end) if isinstance(end, int) and end != start_n else None
+        label = f"Ch {start_n}–{end_n}" if end_n else f"Ch {start_n}"
+        note = " ".join(str(chapter.get("description") or "").split())
+        if note and _MINOR_BEAT.search(note):
+            continue
+        who, cast_marks = _pairing(present, people, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
+        tag_marks = _chapter_marks(acts, note, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
+        line = who
+        if note and note.lower() not in who.lower():
+            line = f"{who} — {note}" if who else note
+        beats.append(
+            {
+                "start": start_n,
+                "end": end_n,
+                "label": label,
+                "acts": acts[:4],
+                "marks": list(dict.fromkeys([*cast_marks, *tag_marks])),
+                "line": line[:180],
+            }
+        )
+    beats.sort(key=lambda beat: (beat["start"], beat["end"] or beat["start"]))
+    return {"slug": raw.get("slug"), "title": title, "blocked": False, "beats": beats[:80]}
+
+
 def chart_page(
     *,
     sort: str = "top-rated",
@@ -358,11 +643,24 @@ def chart_page(
     limit: int = 24,
     tag: str | None = None,
     heat: str | None = None,
+    room: str | None = None,
 ) -> dict[str, Any]:
     """Ranked manhwa from export (matches PornhwaDB-style top lists; no Yuri/BL)."""
     key = sort if sort in ("top-rated", "trending", "recent") else "top-rated"
-    ranked = _chart_candidates(key)
     heat_key = heat if heat in _HEATS else None
+    room_key = room if room in SIN_ROOMS else None
+    # Rooms search the whole catalogue. The default chart stays on its curated list.
+    ranked = _chart_candidates("trending" if room_key else key)
+    if room_key:
+        ranked = [s for s in ranked if series_in_room(s, room_key)]
+        act_wanted = _ROOM_ACTS.get(room_key, frozenset())
+        ranked.sort(
+            key=lambda s: (
+                -_chapter_act_hits(s, act_wanted),
+                -_weighted_rating(s),
+                -int((s.get("ratingAggregate") or {}).get("totalRatings") or 0),
+            )
+        )
     if heat_key:
         ranked = [s for s in ranked if series_heat(s) == heat_key]
     if tag:
@@ -381,6 +679,7 @@ def chart_page(
         "sort": key,
         "tag": tag,
         "heat": heat_key,
+        "room": room_key,
         "page": page,
         "perPage": limit,
         "total": len(ranked),

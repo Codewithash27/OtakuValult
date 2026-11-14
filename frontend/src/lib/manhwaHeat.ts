@@ -19,6 +19,10 @@ export type ManhwaHeat = 'soft' | 'steamy' | 'explicit'
 
 const YOUTH_TAGS = new Set(['school life', 'teacher', 'high school', 'middle school', 'elementary school'])
 
+export function isYouthTagged(tags: string[]): boolean {
+  return tags.some((tag) => YOUTH_TAGS.has(tag.toLowerCase()))
+}
+
 export function heatOf(tags: string[]): ManhwaHeat {
   const names = new Set(tags.map((tag) => tag.toLowerCase()))
   if ([...names].some((tag) => YOUTH_TAGS.has(tag))) return 'soft'

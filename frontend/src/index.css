@@ -404,6 +404,10 @@
   to { transform: rotateX(-8deg) rotateY(360deg); }
 }
 @keyframes shimmer { to { background-position: 200% center; } }
+@keyframes cuckold-spark {
+  0%, 100% { box-shadow: 0 0 0 rgba(251, 191, 36, 0); transform: scale(1); }
+  50% { box-shadow: 0 0 10px rgba(251, 191, 36, 0.95); transform: scale(1.06); }
+}
 
 /* Cinematic poster wall */
 .wall-stage { perspective: 1600px; }

@@ -34,14 +34,27 @@ function listBackSearchParams(params: URLSearchParams): string {
   if (heat) next.set('heat', heat)
   const room = params.get('room')
   if (room) next.set('room', room)
+  const also = params.get('also')
+  if (also) next.set('also', also)
+  const act = params.get('act')
+  if (act) next.set('act', act)
   const q = next.toString()
   return q ? `?${q}` : ''
 }
 
 const SIN_ROOMS: { id: SinRoomId; title: string; line: string }[] = [
   { id: 'affair', title: 'The Affair', line: 'Cheating' },
-  { id: 'ntr', title: 'NTR', line: 'Taken' },
-  { id: 'swap', title: 'The Swap', line: 'Partners traded' },
+  { id: 'netorare', title: 'Netorare', line: 'Someone takes his partner' },
+  { id: 'netori', title: 'Netori', line: 'He takes someone else' },
+  { id: 'netorase', title: 'Netorase', line: 'He sets it up' },
+  { id: 'cuckold', title: 'Cuckold', line: 'Another man, his partner' },
+  { id: 'swap', title: 'The Swap', line: 'Swinging and sharing' },
+  { id: 'milf', title: 'MILF', line: 'Older women' },
+  { id: 'harem', title: 'Harem', line: 'More than one' },
+  { id: 'hardcore', title: 'Hardcore', line: 'No soft scenes' },
+  { id: 'uncensored', title: 'Uncensored', line: 'Nothing covered' },
+  { id: 'gangbang', title: 'Gangbang', line: 'The whole group' },
+  { id: 'family', title: 'Adult family', line: 'Stepmom, aunt, in-law' },
   { id: 'blackmail', title: 'Blackmail', line: 'Then they give in' },
   { id: 'dare', title: 'The Dare', line: 'Public, watched' },
   { id: 'bind', title: 'The Bind', line: 'Tied and rough' },
@@ -191,7 +204,12 @@ function ManhwaTopList() {
   const selectedTag = params.get('tag')
   const roomParam = params.get('room')
   const room: SinRoomId | null = roomParam && ROOM_IDS.has(roomParam) ? (roomParam as SinRoomId) : null
+  const alsoParam = params.get('also')
+  const also: SinRoomId | null =
+    alsoParam && alsoParam !== room && ROOM_IDS.has(alsoParam) ? (alsoParam as SinRoomId) : null
+  const act = (params.get('act') || '').trim()
   const activeRoom = SIN_ROOMS.find((item) => item.id === room) ?? null
+  const alsoRoom = SIN_ROOMS.find((item) => item.id === also) ?? null
   const [page, setPage] = useState(1)
   const listQuery = listBackSearchParams(params)
   const [blurAdult] = useGalleryBlur()
@@ -225,8 +243,8 @@ function ManhwaTopList() {
   })
 
   const list = useQuery({
-    queryKey: ['manhwa-chart', safeSort, page, selectedTag, heat, room],
-    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag, heat, room),
+    queryKey: ['manhwa-chart', safeSort, page, selectedTag, heat, room, also, act],
+    queryFn: () => fetchManhwaChartPage(page, safeSort, UI_PAGE_SIZE, selectedTag, heat, room, also, act || null),
     enabled: !!status.data?.configured && isBackendConfigured(),
     staleTime: 10 * 60 * 1000,
   })
@@ -325,8 +343,34 @@ function ManhwaTopList() {
     setParams((prev) => {
       const n = new URLSearchParams(prev)
       n.delete('tag')
-      if (room === next) n.delete('room')
-      else n.set('room', next)
+      if (room === next) {
+        n.delete('room')
+        n.delete('also')
+      } else {
+        n.set('room', next)
+        if (n.get('also') === next) n.delete('also')
+      }
+      return n
+    })
+    setPage(1)
+  }
+
+  const setAlso = (next: SinRoomId) => {
+    setParams((prev) => {
+      const n = new URLSearchParams(prev)
+      if (also === next) n.delete('also')
+      else n.set('also', next)
+      return n
+    })
+    setPage(1)
+  }
+
+  const setAct = (next: string) => {
+    setParams((prev) => {
+      const n = new URLSearchParams(prev)
+      const cleaned = next.trim().slice(0, 40)
+      if (cleaned) n.set('act', cleaned)
+      else n.delete('act')
       return n
     })
     setPage(1)
@@ -381,10 +425,51 @@ function ManhwaTopList() {
           })}
         </div>
         {activeRoom && (
-          <p className="text-xs text-rose-700/80 dark:text-rose-200/80">
-            {activeRoom.title} · {list.data?.total ?? '…'} titles. Tap the room again to leave.
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-rose-700/80 dark:text-rose-200/80">
+              {activeRoom.title}
+              {alsoRoom ? ` + ${alsoRoom.title}` : ''} · {list.data?.total ?? '…'} titles. Tap the room again to leave.
+            </p>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <span className="shrink-0 self-center text-[10px] font-bold uppercase tracking-wide text-rose-300/80">Also</span>
+              {SIN_ROOMS.filter((item) => item.id !== room).map((item) => {
+                const on = also === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAlso(item.id)}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
+                      on ? 'bg-amber-300 text-amber-950 ring-amber-200' : 'text-rose-100 ring-rose-400/30'
+                    }`}
+                  >
+                    {item.title}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         )}
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const data = new FormData(event.currentTarget)
+            setAct(String(data.get('act') || ''))
+          }}
+        >
+          <input
+            name="act"
+            defaultValue={act}
+            key={act}
+            maxLength={40}
+            placeholder="Chapter act, like creampie or threesome"
+            className="min-w-0 flex-1 rounded-xl bg-black/35 px-3 py-2 text-sm text-rose-50 ring-1 ring-rose-400/25 placeholder:text-rose-200/40"
+          />
+          <button type="submit" className="shrink-0 rounded-xl bg-rose-500 px-3 py-2 text-xs font-bold text-white">
+            Find
+          </button>
+        </form>
       </section>
 
       <div className="glass rounded-2xl p-2 flex flex-col gap-2 sticky top-[4.5rem] z-20">
@@ -495,7 +580,7 @@ function ManhwaTopList() {
       ) : (
         <>
           <div
-            key={`${safeSort}-${page}-${selectedTag ?? ''}-${heat ?? ''}-${room ?? ''}`}
+            key={`${safeSort}-${page}-${selectedTag ?? ''}-${heat ?? ''}-${room ?? ''}-${also ?? ''}-${act}`}
             className="stagger-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6"
           >
             {page === 1 &&

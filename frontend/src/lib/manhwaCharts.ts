@@ -33,7 +33,22 @@ export async function fetchChartMembership(
   return { slugs: data.slugs ?? [], titles: data.titles ?? [] }
 }
 
-export type SinRoomId = 'affair' | 'ntr' | 'swap' | 'blackmail' | 'dare' | 'bind'
+export type SinRoomId =
+  | 'affair'
+  | 'netorare'
+  | 'netori'
+  | 'netorase'
+  | 'cuckold'
+  | 'swap'
+  | 'milf'
+  | 'harem'
+  | 'hardcore'
+  | 'uncensored'
+  | 'gangbang'
+  | 'family'
+  | 'blackmail'
+  | 'dare'
+  | 'bind'
 
 export async function fetchManhwaChartPage(
   page: number,
@@ -42,6 +57,8 @@ export async function fetchManhwaChartPage(
   tag: string | null = null,
   heat: ManhwaHeat | null = null,
   room: SinRoomId | null = null,
+  also: SinRoomId | null = null,
+  act: string | null = null,
 ): Promise<{ items: RankedManhwa[]; hasNextPage: boolean; total: number }> {
   const params = new URLSearchParams({
     sort,
@@ -51,6 +68,8 @@ export async function fetchManhwaChartPage(
   if (tag) params.set('tag', tag)
   if (heat) params.set('heat', heat)
   if (room) params.set('room', room)
+  if (also) params.set('also', also)
+  if (act) params.set('act', act)
   const data = await apiFetch<{
     items: RankedManhwa[]
     hasNextPage: boolean

@@ -355,8 +355,17 @@ def chart_membership(sort: str = "top-rated") -> dict[str, list[str]]:
 # Sin rooms match series genre tags. School-tagged titles stay out of every room.
 SIN_ROOMS: dict[str, frozenset[str]] = {
     "affair": frozenset({"cheating", "adulterer", "betrayal"}),
-    "ntr": frozenset({"netorare", "netori", "netorase"}),
-    "swap": frozenset({"swapping", "multiple couples"}),
+    "netorare": frozenset({"netorare"}),
+    "netori": frozenset({"netori"}),
+    "netorase": frozenset({"netorase"}),
+    "cuckold": frozenset(),
+    "swap": frozenset({"swapping", "multiple couples", "sharing"}),
+    "milf": frozenset({"milf", "cougar"}),
+    "harem": frozenset({"harem", "reverse harem"}),
+    "hardcore": frozenset({"hardcore"}),
+    "uncensored": frozenset({"uncensored"}),
+    "gangbang": frozenset(),
+    "family": frozenset({"incest", "inseki", "oyakodon", "step-family", "step-incest", "stepmother", "mother-in-law"}),
     "blackmail": frozenset({"blackmail", "mind control", "corruption"}),
     "dare": frozenset({"exhibitionism", "voyeur", "voyeurism", "public sex"}),
     "bind": frozenset({"bdsm"}),
@@ -408,9 +417,28 @@ def _kept_out(series: dict[str, Any]) -> bool:
 
 
 _ROOM_ACTS: dict[str, frozenset[str]] = {
+    "netorare": frozenset({"netorare"}),
+    "netori": frozenset({"netori"}),
+    "netorase": frozenset({"netorase"}),
+    "cuckold": frozenset({"cuckold", "cucking"}),
+    "swap": frozenset({"swapping", "swining", "sharing"}),
+    "gangbang": frozenset({"gangbang", "mmf"}),
     "dare": frozenset({"public", "voyeurism", "exhibitionism"}),
     "bind": frozenset({"bdsm", "spanking", "femdom"}),
 }
+
+# Dare and bind need two chapter hits. A single cuckold, swap, or gangbang tag is the point of that room.
+_ROOM_ACT_MIN = {"cuckold": 1, "swap": 1, "gangbang": 1}
+
+_FAMILY_DROP = re.compile(
+    r"daughter|sister|daddy|\bdad\b|school|teen|loli|shota|underage|\bchild\b|\bchildren\b|"
+    r"younger|brother|niece|imouto|toddler|kindergarten|elementary|preteen",
+    re.IGNORECASE,
+)
+_FAMILY_OK = re.compile(
+    r"step|milf|cougar|\baunt\b|in-law|in law|stepmother|mother-in-law|\bmom\b|\bmother\b",
+    re.IGNORECASE,
+)
 
 
 def _chapter_act_hits(series: dict[str, Any], wanted: frozenset[str]) -> int:
@@ -423,16 +451,33 @@ def _chapter_act_hits(series: dict[str, Any], wanted: frozenset[str]) -> int:
     return hits
 
 
+def _family_allowed(series: dict[str, Any]) -> bool:
+    """Adult stepmom, milf, aunt, and in-law titles. Daughter, sister, and school titles stay out."""
+    title_bits = [
+        str(series.get("title") or ""),
+        *(str(t) for t in (series.get("alternativeTitles") or [])),
+        *_tag_names(series),
+    ]
+    label = " ".join(title_bits)
+    blob = f"{label} {series.get('description') or ''}"
+    if _FAMILY_DROP.search(blob) or _MINOR_TEXT.search(blob):
+        return False
+    return bool(_FAMILY_OK.search(label))
+
+
 def series_in_room(series: dict[str, Any], room: str) -> bool:
-    wanted = SIN_ROOMS.get(room)
-    if not wanted or _kept_out(series):
+    if room not in SIN_ROOMS or _kept_out(series):
+        return False
+    if room == "family" and not _family_allowed(series):
         return False
     names = {t.lower().strip() for t in _tag_names(series)}
-    if names & wanted:
+    wanted = SIN_ROOMS[room]
+    if wanted and names & wanted:
         return True
     acts = _ROOM_ACTS.get(room)
-    # One stray chapter should not pull a series into the room.
-    return bool(acts and _chapter_act_hits(series, acts) >= 2)
+    # Dare and bind ignore a single stray chapter. Cuckold, swap, and gangbang count from one.
+    need = _ROOM_ACT_MIN.get(room, 2)
+    return bool(acts and _chapter_act_hits(series, acts) >= need)
 
 
 def _chapter_act_names(chapter: dict[str, Any]) -> list[str]:
@@ -480,18 +525,191 @@ def _gender_of(description: str) -> str:
     return "u"
 
 
+_POSSESSIVE_REL = re.compile(
+    r"([A-Z][\w'’\-]*(?:\s+[A-Z][\w'’\-]*){0,2})['’]s\s+"
+    r"(?:(?:younger|older|little|eldest|youngest|childhood|easy-going|ex)\s+){0,3}"
+    r"((?i:step-?mother|step-?father|mother-in-law|father-in-law|sister-in-law|"
+    r"ex-?wife|ex-?husband|ex-?girlfriend|ex-?boyfriend|"
+    r"girlfriend|boyfriend|wife|husband|mother|father|sister|brother|"
+    r"friend|daughter|son|boss|crush|fianc[eé]e?|"
+    r"aunt|uncle|cousin|neighbou?r))",
+)
+
+# Specific words first. "girlfriend" must win before "friend".
+_REL_WORDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("shopkeeper", re.compile(r"shop\s*keeper|shop owner|store owner|store clerk", re.I)),
+    ("student", re.compile(r"\bstudent\b|\bclassmate\b|\bpupil\b", re.I)),
+    ("teacher", re.compile(r"\bteacher\b|\bprofessor\b|\btutor\b", re.I)),
+    ("stepmother", re.compile(r"step-?mom|step-?mother", re.I)),
+    ("stepfather", re.compile(r"step-?dad|step-?father", re.I)),
+    ("mother-in-law", re.compile(r"mother-in-law", re.I)),
+    ("sister-in-law", re.compile(r"sister-in-law", re.I)),
+    ("ex-wife", re.compile(r"ex-?wife", re.I)),
+    ("ex-girlfriend", re.compile(r"ex-?girlfriend", re.I)),
+    ("ex-boyfriend", re.compile(r"ex-?boyfriend", re.I)),
+    ("girlfriend", re.compile(r"\bgirlfriend\b", re.I)),
+    ("boyfriend", re.compile(r"\bboyfriend\b", re.I)),
+    ("wife", re.compile(r"\bwife\b|\bhousewife\b", re.I)),
+    ("husband", re.compile(r"\bhusband\b", re.I)),
+    ("mother", re.compile(r"\bmother\b|\bmom\b", re.I)),
+    ("father", re.compile(r"\bfather\b|\bdad\b", re.I)),
+    ("sister", re.compile(r"\bsister\b", re.I)),
+    ("brother", re.compile(r"\bbrother\b", re.I)),
+    ("aunt", re.compile(r"\baunt\b", re.I)),
+    ("uncle", re.compile(r"\buncle\b", re.I)),
+    ("cousin", re.compile(r"\bcousin\b", re.I)),
+    ("niece", re.compile(r"\bniece\b", re.I)),
+    ("relative", re.compile(r"\brelative\b|\bin-law\b", re.I)),
+    ("neighbor", re.compile(r"\bneighbou?r\b", re.I)),
+    ("boss", re.compile(r"\bboss\b", re.I)),
+    ("coworker", re.compile(r"\bcoworker\b|\bcolleague\b|\bco-worker\b", re.I)),
+    ("nurse", re.compile(r"\bnurse\b", re.I)),
+    ("doctor", re.compile(r"\bdoctor\b", re.I)),
+    ("maid", re.compile(r"\bmaid\b", re.I)),
+    ("secretary", re.compile(r"\bsecretary\b", re.I)),
+    ("landlord", re.compile(r"\blandlord\b", re.I)),
+    ("model", re.compile(r"\bmodel\b|\bidol\b", re.I)),
+    ("friend", re.compile(r"\bfriend\b", re.I)),
+    ("crush", re.compile(r"\bcrush\b", re.I)),
+    ("bully", re.compile(r"\bbully\b", re.I)),
+    ("detective", re.compile(r"\bdetective\b", re.I)),
+)
+
+
+def _bio_relation(name: str, bio: str) -> str:
+    """Short relation from the catalogue bio or from a name like \"Juhui's Husband\"."""
+    text = bio or ""
+    of_rel = re.search(
+        r"\b(friend|wife|husband|girlfriend|boyfriend|daughter|son|sister|brother)\s+of\s+"
+        r"([A-Z][\w'’-]+)(?:['’]s)?\s+(mother|mom|father|dad|friend|wife|husband)\b",
+        text,
+        re.I,
+    )
+    if of_rel:
+        who = re.sub(r"['’]s$", "", of_rel.group(2))
+        return f"{who}'s {of_rel.group(3).lower()}'s {of_rel.group(1).lower()}"
+    found = _POSSESSIVE_REL.search(text)
+    if found:
+        who = re.sub(r"^(?:As|A|An|The)\s+", "", found.group(1))
+        return f"{who}'s {found.group(2).lower()}"
+    named = re.match(r"(.+?)['’]s\s+(.+)$", (name or "").strip())
+    if named:
+        return f"{named.group(1)}'s {named.group(2).strip().lower()}"
+    for label, pattern in _REL_WORDS:
+        for match in pattern.finditer(bio or ""):
+            prefix = (bio or "")[max(0, match.start() - 12) : match.start()].lower()
+            # "his wife" talks about someone else. "a dirty wife" is this character.
+            if re.search(r"\b(his|her|their|your|my)\s+$", prefix):
+                continue
+            return label
+    short = " ".join((bio or "").split())
+    if short and len(short) <= 42:
+        return short.rstrip(".")
+    return ""
+
+
+def _relation_label(person: dict[str, str], *, sole_main: bool) -> str:
+    bio = person.get("bio") or ""
+    role = person["role"].lower()
+    is_mc = bool(re.search(r"main character|protagonist|story revolves", bio, re.I)) or (role == "main" and sole_main)
+    rel = _bio_relation(person["name"], bio)
+    if rel and rel.lower() in person["name"].lower():
+        rel = ""
+    if rel:
+        return f"MC, {rel}" if is_mc and sole_main else rel
+    if is_mc:
+        return "MC"
+    if role == "main":
+        return "lead"
+    return ""
+
+
+def _with_relation(person: dict[str, str]) -> str:
+    rel = person.get("relation") or ""
+    if not rel:
+        return person["name"]
+    return f"{person['name']} ({rel})"
+
+
 def _series_people(raw: dict[str, Any]) -> dict[str, dict[str, str]]:
     people: dict[str, dict[str, str]] = {}
     for person in raw.get("characters") or []:
         if not isinstance(person, dict) or not person.get("name"):
             continue
         name = str(person["name"])
+        bio = str(person.get("description") or "")
         people[name] = {
             "name": name,
             "role": str(person.get("role") or ""),
-            "gender": _gender_of(str(person.get("description") or "")),
+            "gender": _gender_of(bio),
+            "bio": bio,
+            "relation": "",
+            "has_spouse": bool(re.search(r"\b(?:his|her)\s+(?:wife|husband)\b", bio, re.I)),
         }
+    sole_main = sum(1 for person in people.values() if person["role"].lower() == "main") == 1
+    for person in people.values():
+        person["relation"] = _relation_label(person, sole_main=sole_main)
+    _apply_story_roles(raw, people)
     return people
+
+
+def _apply_story_roles(raw: dict[str, Any], people: dict[str, dict[str, str]]) -> None:
+    """Use the synopsis when it says whose mom, and which friend is with her son."""
+    text = " ".join(
+        [
+            str(raw.get("title") or ""),
+            *(str(title) for title in (raw.get("alternativeTitles") or [])),
+            str(raw.get("description") or ""),
+        ]
+    )
+    names = set(people)
+    sons: list[tuple[str, str, str]] = []
+
+    def add_son(found: str, hint: str, role: str) -> None:
+        if found and found not in {name for name, _hint, _role in sons}:
+            sons.append((found, hint, role))
+
+    for match in re.finditer(r"([A-Z][\w'’-]+)['’]s\s+(?:mom|mother)\b", text):
+        window = text[match.end() : match.end() + 70]
+        he = re.search(r"\b(?:he|him|his)\b", window, re.I)
+        she = re.search(r"\b(?:she|her)\b", window, re.I)
+        if he and (not she or he.start() < she.start()):
+            role = "son"
+        else:
+            role = ""
+        add_son(_match_cast(match.group(1), names), match.group(1), role)
+    for match in re.finditer(r"([A-Z][\w'’-]+)\s+is\b.{0,80}\bhis\s+mom", text):
+        add_son(_match_cast(match.group(1), names), match.group(1), "son")
+    mothers = [
+        person["name"]
+        for person in people.values()
+        if (person.get("relation") or "").lower() in {"mother", "mom"}
+        or _bio_relation(person["name"], person.get("bio") or "").lower() in {"mother", "mom"}
+    ]
+    if len(sons) == 1:
+        son, hint, role = sons[0]
+        if role:
+            people[son]["relation"] = role
+        if len(mothers) == 1 and mothers[0] != son:
+            people[mothers[0]]["relation"] = f"{hint}'s mother"
+    elif len(mothers) == 1:
+        named = re.search(r"([A-Z][\w'’-]+)['’]s\s+(?:mom|mother)\b", text)
+        if named and not _match_cast(named.group(1), names):
+            people[mothers[0]]["relation"] = f"{named.group(1)}'s mother"
+    named_mom = re.search(
+        r"([A-Z][\w'’-]+)['’]s\s+(?:mom|mother),?\s+((?:Mrs\.?\s+|Mr\.?\s+)?[A-Z][\w'’-]+)",
+        text,
+    )
+    if named_mom:
+        mom = _match_cast(named_mom.group(2), names)
+        if mom:
+            people[mom]["relation"] = f"{named_mom.group(1)}'s mother"
+    friend_story = bool(
+        re.search(r"mom['’]s\s+friends?|\bfriends?\b.{0,50}\b(?:tempt|seduc|teas)", text, re.I)
+    )
+    if friend_story and len(sons) == 1 and len(mothers) == 1:
+        for person in people.values():
+            person["mom_circle"] = sons[0][0]
 
 
 def _chapter_people(chapter: dict[str, Any], people: dict[str, dict[str, str]]) -> list[dict[str, str]]:
@@ -510,9 +728,82 @@ def _chapter_people(chapter: dict[str, Any], people: dict[str, dict[str, str]]) 
                 "name": name,
                 "role": str(person.get("role") or known.get("role") or ""),
                 "gender": known.get("gender") or "u",
+                "relation": known.get("relation") or "",
+                "bio": known.get("bio") or "",
             }
         )
     return present
+
+
+def _match_cast(hint: str, names: set[str]) -> str:
+    key = re.sub(r"[^a-z0-9]+", "", hint.lower())
+    if len(key) < 3:
+        return ""
+
+    def fold(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+    exact = [name for name in names if fold(name) == key]
+    if exact:
+        return exact[0]
+    hits = [name for name in names if key in fold(name)]
+    if len(hits) == 1:
+        return hits[0]
+    return ""
+
+
+def _cast_bonds(people: dict[str, dict[str, str]]) -> list[tuple[str, str, str]]:
+    """(spouse owner, the other person, wife|husband|girlfriend|boyfriend)."""
+    bonds: list[tuple[str, str, str]] = []
+    names = set(people)
+    for person in people.values():
+        raw = _bio_relation(person["name"], person.get("bio") or "")
+        match = re.fullmatch(r"(.+?)'s ([a-z][a-z -]{1,24})", raw.strip(), re.I)
+        if not match:
+            continue
+        owner = _match_cast(match.group(1), names)
+        kind = match.group(2).strip().lower()
+        if owner and owner != person["name"] and kind in {"wife", "husband", "girlfriend", "boyfriend", "ex-wife", "ex-girlfriend", "ex-boyfriend"}:
+            bonds.append((owner, person["name"], kind))
+    return bonds
+
+
+def _between(left: str, right: str, bonds: list[tuple[str, str, str]], married: tuple[str, str] | None) -> str:
+    """How these two are connected. Blank when the catalogue never says."""
+    for owner, other, kind in bonds:
+        if {owner, other} != {left, right}:
+            continue
+        if kind == "wife":
+            return "his wife"
+        if kind == "husband":
+            return "her husband"
+        if kind == "girlfriend":
+            return "his girlfriend"
+        if kind == "boyfriend":
+            return "her boyfriend"
+        if kind.startswith("ex-"):
+            return kind
+    for person, partner in ((right, left), (left, right)):
+        for owner, other, kind in bonds:
+            if person not in {owner, other} or partner in {owner, other}:
+                continue
+            if kind == "wife" and other == person:
+                return f"she is {owner}'s wife, not his"
+            if kind == "husband" and owner == person:
+                return "she is married to someone else"
+            if kind == "girlfriend" and other == person:
+                return f"she is {owner}'s girlfriend, not his"
+            if kind == "boyfriend" and owner == person:
+                return "her boyfriend is someone else"
+            if kind == "wife" and owner == person:
+                return "he is married to someone else"
+            if kind == "husband" and other == person:
+                return f"he is {owner}'s husband, not hers"
+    if married and {left, right} == set(married):
+        return "his wife"
+    if married and (left in married) ^ (right in married):
+        return "not his wife"
+    return ""
 
 
 def _pairing(
@@ -538,19 +829,55 @@ def _pairing(
     other_women = [person for person in outsiders if person["gender"] == "f"]
     only_couple = bool(couple) and bool(names) and names <= couple
     other_with_her = bool(female_name) and female_name in names and bool(other_men)
+    bonds = _cast_bonds(people)
+    spouse_mains = [
+        person for person in people.values() if person["role"].lower() == "main" and person.get("has_spouse")
+    ]
+    husbands = [person["name"] for person in spouse_mains if person["gender"] == "m"]
+    wives = [person["name"] for person in spouse_mains if person["gender"] == "f"]
+    married = (husbands[0], wives[0]) if len(husbands) == 1 and len(wives) == 1 else None
 
     pairs: list[str] = []
+    by_name = {person["name"]: person for person in present}
+
+    def who(name: str) -> str:
+        return _with_relation(by_name.get(name) or people.get(name) or {"name": name, "relation": ""})
+
+    def shown(name: str, partner: str) -> str:
+        person = people.get(name) or {"name": name, "relation": ""}
+        rel = person.get("relation") or ""
+        partner_rel = (people.get(partner) or {}).get("relation") or ""
+        if (
+            rel in {"", "lead"}
+            and partner_rel == "son"
+            and person.get("mom_circle")
+            and person.get("gender") != "m"
+            and "husband" not in name.lower()
+        ):
+            rel = "his mom's friend"
+        if not rel:
+            return name
+        return f"{name} ({rel})"
+
+    def linked(left: str, right: str) -> str:
+        base = f"{shown(left, right)} with {shown(right, left)}"
+        extra = _between(left, right, bonds, married)
+        return f"{base} — {extra}" if extra else base
+
     if other_with_her:
-        pairs.append(f"{female_name} with {other_men[0]['name']}")
+        pairs.append(linked(female_name, other_men[0]["name"]))
     if male_name and male_name in names and other_women:
-        pairs.append(f"{male_name} with {other_women[0]['name']}")
+        pairs.append(linked(male_name, other_women[0]["name"]))
     if not pairs and only_couple:
         ordered = [person["name"] for person in present if person["name"] in couple]
-        pairs.append(" with ".join(ordered[:2]))
+        if len(ordered) >= 2:
+            pairs.append(linked(ordered[0], ordered[1]))
+        elif ordered:
+            pairs.append(who(ordered[0]))
     elif not pairs and len(present) >= 2:
-        pairs.append(f"{present[0]['name']} with {present[1]['name']}")
+        pairs.append(linked(present[0]["name"], present[1]["name"]))
     elif not pairs and present:
-        pairs.append(present[0]["name"])
+        pairs.append(_with_relation(present[0]))
 
     marks: list[str] = []
     if only_couple:
@@ -619,9 +946,10 @@ def series_acts(slug: str) -> dict[str, Any] | None:
             continue
         who, cast_marks = _pairing(present, people, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
         tag_marks = _chapter_marks(acts, note, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
+        # The relation line is what the card shows. The raw note stays only when no role is known.
         line = who
-        if note and note.lower() not in who.lower():
-            line = f"{who} — {note}" if who else note
+        if note and note.lower() not in (who or "").lower():
+            line = f"{who}. {note}" if who else note
         beats.append(
             {
                 "start": start_n,
@@ -629,7 +957,7 @@ def series_acts(slug: str) -> dict[str, Any] | None:
                 "label": label,
                 "acts": acts[:4],
                 "marks": list(dict.fromkeys([*cast_marks, *tag_marks])),
-                "line": line[:180],
+                "line": line[:420],
             }
         )
     beats.sort(key=lambda beat: (beat["start"], beat["end"] or beat["start"]))
@@ -644,16 +972,32 @@ def chart_page(
     tag: str | None = None,
     heat: str | None = None,
     room: str | None = None,
+    also: str | None = None,
+    act: str | None = None,
 ) -> dict[str, Any]:
     """Ranked manhwa from export (matches PornhwaDB-style top lists; no Yuri/BL)."""
     key = sort if sort in ("top-rated", "trending", "recent") else "top-rated"
     heat_key = heat if heat in _HEATS else None
     room_key = room if room in SIN_ROOMS else None
-    # Rooms search the whole catalogue. The default chart stays on its curated list.
-    ranked = _chart_candidates("trending" if room_key else key)
+    also_key = also if also in SIN_ROOMS and also != room_key else None
+    raw_act = (act or "").strip().lower()[:40]
+    act_blocked = bool(raw_act) and (
+        raw_act in _ACT_SKIP or bool(_MINOR_TEXT.search(raw_act)) or bool(_FAMILY_DROP.search(raw_act))
+    )
+    act_key = "" if act_blocked else raw_act
+    # Rooms and act search use the whole catalogue. The default chart stays on its curated list.
+    ranked = [] if act_blocked else _chart_candidates("trending" if room_key or also_key or act_key else key)
     if room_key:
         ranked = [s for s in ranked if series_in_room(s, room_key)]
-        act_wanted = _ROOM_ACTS.get(room_key, frozenset())
+    if also_key:
+        ranked = [s for s in ranked if series_in_room(s, also_key)]
+    if act_key:
+        wanted_act = frozenset({act_key})
+        ranked = [s for s in ranked if _chapter_act_hits(s, wanted_act) >= 1]
+    if room_key or act_key:
+        act_wanted = _ROOM_ACTS.get(room_key or "", frozenset())
+        if act_key:
+            act_wanted = frozenset({act_key})
         ranked.sort(
             key=lambda s: (
                 -_chapter_act_hits(s, act_wanted),
@@ -680,6 +1024,8 @@ def chart_page(
         "tag": tag,
         "heat": heat_key,
         "room": room_key,
+        "also": also_key,
+        "act": act_key or None,
         "page": page,
         "perPage": limit,
         "total": len(ranked),

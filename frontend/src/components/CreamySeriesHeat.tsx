@@ -92,8 +92,10 @@ function Viewer({ post, onClose }: { post: ExplicitPost; onClose: () => void }) 
   )
 }
 
-function MarkPills({ marks }: { marks: InfidelityMark[] }) {
+function MarkPills({ marks, line }: { marks: InfidelityMark[]; line?: string }) {
+  const tied = /mom's friend|\bson\b|married to someone else|not his wife/i.test(line || '')
   if (!marks.length) {
+    if (tied) return null
     return (
       <span className="mt-1 inline-flex px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-white/10 text-slate-300">
         Clean
@@ -164,12 +166,13 @@ function Panel({
 export function CreamySeriesHeat({ slug, title, tags }: Props) {
   const [blur] = useGalleryBlur()
   const [picked, setPicked] = useState<number | null>(null)
+  const [focus, setFocus] = useState('all')
   const [open, setOpen] = useState<ExplicitPost | null>(null)
   const youth = isYouthTagged(tags) || MINOR_TITLE.test(title)
   const ready = isBackendConfigured() && !youth
 
   const acts = useQuery({
-    queryKey: ['series-acts', 'who2', slug],
+    queryKey: ['series-acts', 'who8', slug],
     queryFn: () => fetchSeriesActs(slug),
     enabled: ready,
     staleTime: 30 * 60 * 1000,
@@ -184,10 +187,32 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
     retry: false,
   })
   const beats = blocked ? [] : (acts.data?.beats ?? [])
+  const focusChoices = useMemo(() => {
+    const found: { id: string; label: string }[] = []
+    const seen = new Set<string>()
+    const add = (id: string, label: string) => {
+      if (seen.has(id)) return
+      seen.add(id)
+      found.push({ id, label })
+    }
+    for (const beat of beats) {
+      for (const mark of beat.marks ?? []) add(mark, MARK_LABEL[mark])
+      for (const act of beat.acts) {
+        const key = act.toLowerCase()
+        if (['gangbang', 'milf', 'threesome', 'creampie', 'blowjob', 'bondage', 'mmf'].includes(key)) add(key, act)
+      }
+    }
+    return found
+  }, [beats])
+  const shownBeats = beats.filter((beat) => {
+    if (focus === 'all') return true
+    if ((beat.marks ?? []).includes(focus as InfidelityMark)) return true
+    return beat.acts.some((act) => act.toLowerCase() === focus)
+  })
   const posts = blocked ? [] : (reel.data?.posts ?? [])
-  const beat = picked != null ? beats[picked] : undefined
+  const beat = picked != null ? shownBeats[picked] : undefined
   const shown = useMemo(() => (beat ? posts.filter((post) => inBeat(beat, chapterOf(post.file_url))) : posts), [beat, posts])
-  const panels = shown.length > 0 ? shown : posts
+  const panels = shown.length > 0 ? shown : focus === 'all' ? posts : []
 
   if (!ready) return null
   if (acts.isLoading && reel.isLoading) {
@@ -199,15 +224,48 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
     <div className="space-y-6">
       {beats.length > 0 && (
         <Section title="Where it happens">
+          {focusChoices.length > 0 && (
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setFocus('all')
+                  setPicked(null)
+                }}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${
+                  focus === 'all' ? 'bg-rose-500 text-white ring-rose-300' : 'text-rose-700 ring-rose-400/30 dark:text-rose-100'
+                }`}
+              >
+                All chapters
+              </button>
+              {focusChoices.map((choice) => (
+                <button
+                  key={choice.id}
+                  type="button"
+                  onClick={() => {
+                    setFocus(choice.id)
+                    setPicked(null)
+                  }}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${
+                    focus === choice.id
+                      ? 'bg-amber-300 text-amber-950 ring-amber-200'
+                      : 'text-rose-700 ring-rose-400/30 dark:text-rose-100'
+                  }`}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {beats.map((item, index) => {
+            {shownBeats.map((item, index) => {
               const on = picked === index
               return (
                 <button
                   key={`${item.label}-${index}`}
                   type="button"
                   onClick={() => setPicked(on ? null : index)}
-                  className={`w-[168px] shrink-0 rounded-xl px-3 py-2 text-left ring-1 transition ${
+                  className={`w-[240px] shrink-0 rounded-xl px-3 py-2 text-left ring-1 transition ${
                     (item.marks ?? []).length
                       ? on
                         ? 'bg-rose-950 text-white ring-amber-300 shadow-[0_0_18px_rgba(251,191,36,.35)]'
@@ -218,14 +276,14 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
                   }`}
                 >
                   <span className="block text-[11px] font-bold">{item.label}</span>
-                  <MarkPills marks={item.marks ?? []} />
+                  <MarkPills marks={item.marks ?? []} line={item.line} />
                   {item.acts.length > 0 && (
                     <span className={`mt-1 block text-xs leading-snug ${on ? 'text-white' : 'text-rose-700 dark:text-rose-200'}`}>
                       {item.acts.join(' · ')}
                     </span>
                   )}
                   {item.line && (
-                    <span className={`mt-1 block text-[11px] line-clamp-3 leading-snug ${on ? 'text-white/90' : 'text-rose-100/90'}`}>
+                    <span className={`mt-1 block text-[11px] line-clamp-6 leading-snug ${on ? 'text-white/90' : 'text-rose-100/90'}`}>
                       {item.line}
                     </span>
                   )}

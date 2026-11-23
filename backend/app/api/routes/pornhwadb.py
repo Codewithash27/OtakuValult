@@ -21,14 +21,16 @@ async def pornhwadb_charts(
     limit: int = Query(24, ge=1, le=50),
     tag: str | None = Query(None, max_length=80),
     heat: str | None = Query(None, pattern="^(soft|steamy|explicit)$"),
-    room: str | None = Query(None, pattern="^(affair|ntr|swap|blackmail|dare|bind)$"),
+    room: str | None = Query(None, pattern="^(" + "|".join(phdb.SIN_ROOMS) + ")$"),
+    also: str | None = Query(None, pattern="^(" + "|".join(phdb.SIN_ROOMS) + ")$"),
+    act: str | None = Query(None, max_length=40),
 ) -> dict:
     if not phdb.is_configured():
         raise HTTPException(
             status_code=503,
             detail="PornhwaDB export not found. Place pornhwa-export.json on the server (see backend/data/README.md).",
         )
-    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag, heat=heat, room=room)
+    out = phdb.chart_page(sort=sort, page=page, limit=limit, tag=tag, heat=heat, room=room, also=also, act=act)
     register_search_image_urls([i["coverImage"] for i in out.get("items") or [] if i.get("coverImage")])
     return out
 

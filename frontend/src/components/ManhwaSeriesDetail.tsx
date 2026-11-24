@@ -78,7 +78,7 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
   })
 
   const portraits = useQuery({
-    queryKey: ['pornhwadb-portraits', slug],
+    queryKey: ['pornhwadb-portraits', 'rel', slug],
     queryFn: () => fetchPornhwadbExportImages(slug),
     staleTime: 30 * 60 * 1000,
     enabled: !!series.data,
@@ -253,6 +253,9 @@ export function ManhwaSeriesDetail({ slug, backHref }: Props) {
                     <figcaption className="mt-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">
                       {person.label}
                     </figcaption>
+                    {person.caption && (
+                      <p className="text-[10px] leading-snug text-rose-600 dark:text-rose-200 line-clamp-2">{person.caption}</p>
+                    )}
                   </figure>
                 ))}
               </div>

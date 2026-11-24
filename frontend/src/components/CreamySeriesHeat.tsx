@@ -28,8 +28,14 @@ const MINOR_TITLE = /kindergarten|elementary|toddler|underage|preteen|\bloli\b|\
 const MARK_LABEL: Record<InfidelityMark, string> = {
   ntr: 'NTR',
   cuckold: 'Cuckold',
-  swap: 'Swap',
+  swap: 'Sharing',
   cheating: 'Cheating',
+}
+
+const OTHER_THAN_MC = new Set<InfidelityMark>(['cuckold', 'ntr', 'swap'])
+
+function otherThanMc(beat: ActBeat): boolean {
+  return (beat.marks ?? []).some((mark) => OTHER_THAN_MC.has(mark))
 }
 
 function foldName(value: string): string {
@@ -172,7 +178,7 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
   const ready = isBackendConfigured() && !youth
 
   const acts = useQuery({
-    queryKey: ['series-acts', 'who8', slug],
+    queryKey: ['series-acts', 'who10', slug],
     queryFn: () => fetchSeriesActs(slug),
     enabled: ready,
     staleTime: 30 * 60 * 1000,
@@ -187,6 +193,8 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
     retry: false,
   })
   const beats = blocked ? [] : (acts.data?.beats ?? [])
+  const roles = acts.data?.roles ?? {}
+  const withRole = (name: string) => (roles[name] ? `${name} (${roles[name]})` : name)
   const focusChoices = useMemo(() => {
     const found: { id: string; label: string }[] = []
     const seen = new Set<string>()
@@ -195,6 +203,7 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
       seen.add(id)
       found.push({ id, label })
     }
+    if (beats.some(otherThanMc)) add('other', 'Other than MC')
     for (const beat of beats) {
       for (const mark of beat.marks ?? []) add(mark, MARK_LABEL[mark])
       for (const act of beat.acts) {
@@ -204,8 +213,35 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
     }
     return found
   }, [beats])
+  const peopleTags = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const beat of beats) {
+      for (const name of beat.cast ?? []) counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 16)
+      .map(([name]) => ({ id: `name:${name}`, label: withRole(name) }))
+  }, [beats, roles])
+  const pairTags = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const beat of beats) {
+      for (const pair of beat.pairs ?? []) counts.set(pair, (counts.get(pair) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([pair]) => {
+        const [left, right] = pair.split(' with ')
+        const label = right ? `${withRole(left)} with ${withRole(right)}` : pair
+        return { id: `pair:${pair}`, label }
+      })
+  }, [beats, roles])
   const shownBeats = beats.filter((beat) => {
     if (focus === 'all') return true
+    if (focus === 'other') return otherThanMc(beat)
+    if (focus.startsWith('name:')) return (beat.cast ?? []).includes(focus.slice(5))
+    if (focus.startsWith('pair:')) return (beat.pairs ?? []).includes(focus.slice(5))
     if ((beat.marks ?? []).includes(focus as InfidelityMark)) return true
     return beat.acts.some((act) => act.toLowerCase() === focus)
   })
@@ -256,6 +292,31 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
                 </button>
               ))}
             </div>
+          )}
+          {(peopleTags.length > 0 || pairTags.length > 0) && (
+            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
+              {[...peopleTags, ...pairTags].map((choice) => {
+                const on = focus === choice.id
+                return (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    onClick={() => {
+                      setFocus(on ? 'all' : choice.id)
+                      setPicked(null)
+                    }}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
+                      on ? 'bg-rose-500 text-white ring-rose-300' : 'text-rose-50 ring-rose-400/40'
+                    }`}
+                  >
+                    {choice.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {focus !== 'all' && shownBeats.length === 0 && (
+            <p className="mb-2 text-xs text-rose-100/80">No chapter like this.</p>
           )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {shownBeats.map((item, index) => {
@@ -326,7 +387,7 @@ export function CreamySeriesHeat({ slug, title, tags }: Props) {
 
 function StoryFaces({ slug }: { slug: string }) {
   const faces = useQuery({
-    queryKey: ['pornhwadb-portraits', slug],
+    queryKey: ['pornhwadb-portraits', 'rel', slug],
     queryFn: () => fetchPornhwadbExportImages(slug),
     enabled: isBackendConfigured(),
     staleTime: 30 * 60 * 1000,
@@ -345,7 +406,7 @@ function StoryFaces({ slug }: { slug: string }) {
               {person.label}
             </figcaption>
             {person.caption && (
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2">{person.caption}</p>
+              <p className="text-[10px] leading-snug text-rose-600 dark:text-rose-200 line-clamp-2">{person.caption}</p>
             )}
           </figure>
         ))}

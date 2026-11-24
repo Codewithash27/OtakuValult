@@ -80,6 +80,8 @@ export type ActBeat = {
   label: string
   acts: string[]
   marks: InfidelityMark[]
+  cast?: string[]
+  pairs?: string[]
   line: string
 }
 
@@ -88,6 +90,7 @@ export async function fetchSeriesActs(slug: string): Promise<{
   title: string
   blocked: boolean
   beats: ActBeat[]
+  roles?: Record<string, string>
 }> {
   return apiFetch(`/api/pornhwadb/series/${encodeURIComponent(slug)}/acts`)
 }

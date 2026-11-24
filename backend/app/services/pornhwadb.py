@@ -549,6 +549,7 @@ _REL_WORDS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ex-boyfriend", re.compile(r"ex-?boyfriend", re.I)),
     ("girlfriend", re.compile(r"\bgirlfriend\b", re.I)),
     ("boyfriend", re.compile(r"\bboyfriend\b", re.I)),
+    ("work wife", re.compile(r"\bwork\s+wife\b", re.I)),
     ("wife", re.compile(r"\bwife\b|\bhousewife\b", re.I)),
     ("husband", re.compile(r"\bhusband\b", re.I)),
     ("mother", re.compile(r"\bmother\b|\bmom\b", re.I)),
@@ -588,6 +589,15 @@ def _bio_relation(name: str, bio: str) -> str:
     if of_rel:
         who = re.sub(r"['’]s$", "", of_rel.group(2))
         return f"{who}'s {of_rel.group(3).lower()}'s {of_rel.group(1).lower()}"
+    kin = re.search(
+        r"\b(?:((?i:youngest|eldest|older|younger|little))\s+)?"
+        r"((?i:mother|mom|father|dad|daughter|son|sister|brother))\s+of\s+"
+        r"([A-Z][\w'’-]+)",
+        text,
+    )
+    if kin:
+        adj = f"{kin.group(1).lower()} " if kin.group(1) else ""
+        return f"{kin.group(3)}'s {adj}{kin.group(2).lower()}"
     found = _POSSESSIVE_REL.search(text)
     if found:
         who = re.sub(r"^(?:As|A|An|The)\s+", "", found.group(1))
@@ -838,6 +848,7 @@ def _pairing(
     married = (husbands[0], wives[0]) if len(husbands) == 1 and len(wives) == 1 else None
 
     pairs: list[str] = []
+    name_pairs: list[list[str]] = []
     by_name = {person["name"]: person for person in present}
 
     def who(name: str) -> str:
@@ -860,6 +871,7 @@ def _pairing(
         return f"{name} ({rel})"
 
     def linked(left: str, right: str) -> str:
+        name_pairs.append([left, right])
         base = f"{shown(left, right)} with {shown(right, left)}"
         extra = _between(left, right, bonds, married)
         return f"{base} — {extra}" if extra else base
@@ -881,7 +893,7 @@ def _pairing(
 
     marks: list[str] = []
     if only_couple:
-        return " · ".join(pairs), marks
+        return " · ".join(pairs), marks, name_pairs
     if other_with_her or (outsiders and series_is_ntr and not other_women):
         marks.append("cuckold")
         if series_is_ntr:
@@ -890,7 +902,7 @@ def _pairing(
         marks.append("swap")
     elif other_with_her and "cuckold" not in marks:
         marks.append("cuckold")
-    return " · ".join(pairs), list(dict.fromkeys(marks))
+    return " · ".join(pairs), list(dict.fromkeys(marks)), name_pairs
 
 
 def _chapter_marks(acts: list[str], line: str, *, series_is_swap: bool, series_is_ntr: bool) -> list[str]:
@@ -944,7 +956,7 @@ def series_acts(slug: str) -> dict[str, Any] | None:
         note = " ".join(str(chapter.get("description") or "").split())
         if note and _MINOR_BEAT.search(note):
             continue
-        who, cast_marks = _pairing(present, people, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
+        who, cast_marks, pair_names = _pairing(present, people, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
         tag_marks = _chapter_marks(acts, note, series_is_swap=series_is_swap, series_is_ntr=series_is_ntr)
         # The relation line is what the card shows. The raw note stays only when no role is known.
         line = who
@@ -957,11 +969,18 @@ def series_acts(slug: str) -> dict[str, Any] | None:
                 "label": label,
                 "acts": acts[:4],
                 "marks": list(dict.fromkeys([*cast_marks, *tag_marks])),
+                "cast": [person["name"] for person in present],
+                "pairs": [" with ".join(pair) for pair in pair_names],
                 "line": line[:420],
             }
         )
     beats.sort(key=lambda beat: (beat["start"], beat["end"] or beat["start"]))
-    return {"slug": raw.get("slug"), "title": title, "blocked": False, "beats": beats[:80]}
+    roles = {
+        name: person["relation"]
+        for name, person in people.items()
+        if person.get("relation")
+    }
+    return {"slug": raw.get("slug"), "title": title, "blocked": False, "beats": beats[:80], "roles": roles}
 
 
 def chart_page(
@@ -1232,26 +1251,20 @@ def series_images(slug: str) -> dict[str, Any]:
         )
 
     title = str(raw.get("title") or "Untitled")
+    people = _series_people(raw) if not _kept_out(raw) else {}
     add(url=raw.get("coverImage"), label=f"{title} · cover", kind="cover", caption="Catalogue cover")
 
     for ch in raw.get("chapters") or []:
         if not isinstance(ch, dict):
             continue
-        start = ch.get("chapterStart")
-        end = ch.get("chapterEnd")
-        if start is not None and end is not None and end != start:
-            ch_cap = f"Chapters {start}–{end}"
-        elif start is not None:
-            ch_cap = f"Chapter {start}"
-        else:
-            ch_cap = None
         for char in ch.get("characters") or []:
             if not isinstance(char, dict):
                 continue
             name = str(char.get("name") or "Character")
-            role = char.get("role")
-            cap = f"{name}" + (f" · {role}" if role else "") + (f" · {ch_cap}" if ch_cap else "")
-            add(url=char.get("image"), label=name, kind="character", caption=cap)
+            rel = (people.get(name) or {}).get("relation") or ""
+            if rel.lower() in {"lead", "mc"}:
+                rel = "Lead"
+            add(url=char.get("image"), label=name, kind="character", caption=rel or None)
 
     return {
         "slug": raw.get("slug"),
